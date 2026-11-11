@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#12161f"><title>مساعد S2S</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#12161f;--pn:#1b2230;--ln:#2a3447;--tx:#e9edf5;--mu:#8c97ab;--ac:#5cc8ff;--wn:#ffb454;--ok:#6ee7a8;box-sizing:border-box;padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.6 Cairo,system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
+main{max-width:520px;margin:auto;padding:14px}
+h1{font-size:20px;margin:6px 0 12px;font-weight:800}
+.box{background:var(--pn);border:1px solid var(--ln);border-radius:14px;padding:14px;margin-bottom:12px}
+label{display:block;font-size:13px;color:var(--mu);margin:8px 0 3px}
+input,textarea{width:100%;background:var(--bg);color:var(--tx);border:1px solid var(--ln);border-radius:10px;padding:10px;font:inherit;direction:ltr;text-align:left}
+textarea{direction:auto;text-align:start;min-height:90px}
+button{font:inherit;font-weight:600;border:0;border-radius:12px;padding:13px 16px;background:var(--ac);color:#06202e;width:100%;margin-top:8px}
+button.s{background:var(--ln);color:var(--tx)}button.w{background:var(--wn);color:#2b1a00}button:disabled{opacity:.4}
+.row{display:flex;gap:8px}.row>*{flex:1}
+#ring{width:150px;height:150px;border-radius:50%;margin:8px auto;display:grid;place-items:center;text-align:center;border:3px solid var(--ln);font-weight:800;font-size:17px;padding:14px;transition:.3s}
+#ring.on{border-color:var(--ac);box-shadow:0 0 0 8px rgba(92,200,255,.12)}
+#ring.hear{border-color:var(--ok);box-shadow:0 0 0 8px rgba(110,231,168,.12)}
+.meta{text-align:center;color:var(--mu);font-size:14px}
+.turn{border-top:1px solid var(--ln);padding:10px 0}.turn b{color:var(--ac);font-size:13px}
+.turn .me{white-space:pre-wrap;direction:auto}.turn .ar{color:var(--mu);font-size:14px;white-space:pre-wrap}.turn .md{color:var(--ok);font-size:14px;white-space:pre-wrap;direction:auto}
+.hide{display:none}.err{color:#ff8f8f;font-size:14px;white-space:pre-wrap}
+.thumbs{display:flex;gap:6px;flex-wrap:wrap}.thumbs img{width:64px;height:64px;object-fit:cover;border-radius:8px}
+details summary{color:var(--mu);font-size:14px}
+select{width:100%;background:var(--bg);color:var(--tx);border:1px solid var(--ln);border-radius:10px;padding:10px;font:inherit}
+</style></head><body><main>
+<h1>مساعد S2S</h1>
+
+<details class="box" id="cfg"><summary>الإعدادات (مرة واحدة)</summary>
+<label>مزود الـ AI</label><select id="prov" style="width:100%;background:var(--bg);color:var(--tx);border:1px solid var(--ln);border-radius:10px;padding:10px;font:inherit"><option value="gemini">Gemini</option><option value="anthropic">Anthropic (Claude)</option></select><label>API Key الخاص بالمزود</label><input id="kA" type="password">
+<label>ElevenLabs API Key</label><input id="kE" type="password">
+<label>Voice ID (الصوت المستنسخ)</label><input id="vid">
+<label>ElevenLabs model</label><input id="em" value="eleven_v3">
+<label>موديل الـ AI</label><input id="cm" value="gemini-2.5-flash">
+<label>تكبير الصوت (1 = عادي ، 3 = أعلى) — يُطبَّق بعد تحديث الصفحة</label><input id="gain" type="range" min="1" max="4" step="0.5" value="1" style="padding:0">
+<button class="s" id="save">حفظ</button>
+<p class="meta">المفاتيح بتتخزن على موبايلك بس.</p></details>
+
+<section class="box" id="s1">
+<div class="meta">صوّر الـ task (تقدر تصوّر أكتر من صورة)</div>
+<input id="file" type="file" accept="image/*" capture="environment" multiple class="hide">
+<button id="shot">📷 صوّر الـ task</button>
+<div class="thumbs" id="th"></div>
+<label>ملاحظات إضافية (اختياري)</label><textarea id="note" placeholder="مثلاً: لهجة مصرية، مدة 5-10 دقايق"></textarea>
+<div class="row"><div><label>أقل مدة (دقيقة)</label><input id="mn" type="number" min="0" step="0.5" inputmode="decimal" placeholder="تلقائي"></div><div><label>أقصى مدة (دقيقة)</label><input id="mx" type="number" min="1" step="0.5" inputmode="decimal" placeholder="تلقائي"></div></div>
+<button id="go" disabled>ابدأ</button></section>
+
+<section class="box hide" id="s2">
+<div class="meta" id="mdl">Model A</div>
+<label>أنا بكلم</label><select id="lg"><option value="m">راجل</option><option value="f">بنت</option><option value="auto">مش محدد</option></select>
+<div id="ring">جاهز</div>
+<div class="meta" id="clock" style="white-space:pre-line">0:00 · 0 تيرن</div>
+<label><input type="checkbox" id="rev" style="width:auto"> راجع النص قبل التشغيل</label>
+<button id="lis" class="hide"></button>
+<div id="edit" class="hide"><textarea id="ed"></textarea><button id="play">▶ شغّل</button></div>
+<div class="row"><button class="w" id="stop">إيقاف</button></div>
+<div class="row"><button class="s" id="nextB">A خلصت ← B</button></div>
+<div id="err" class="err"></div></section>
+
+<section class="box hide" id="s3"><div id="log"></div></section>
+</main>
+<audio id="au" playsinline></audio>
+<script>
+const $=i=>document.getElementById(i),L=localStorage;
+["kA","kE","vid","em","cm","prov","gain"].forEach(k=>{if(L["s_"+k])$(k).value=L["s_"+k]});
+$("prov").onchange=()=>$("cm").value=$("prov").value=="gemini"?"gemini-2.5-flash":"claude-sonnet-4-6";
+$("save").onclick=()=>{["kA","kE","vid","em","cm","prov","gain"].forEach(k=>L["s_"+k]=$(k).value.trim());$("cfg").open=false};
+if(!$("kA").value)$("cfg").open=true;
+
+const SYS=`You drive a speech-to-speech model evaluation. You write ONLY the next spoken user turn, one at a time, for ElevenLabs TTS (cloned voice).
+Rules: plain speakable text only: no emojis, markdown, quotation marks, parentheses, symbols or digits (write numbers, dates and abbreviations as words the way a person says them); use the dialect's everyday spelling, not formal or transliterated words; apply the same quality bar to the first turn as to every later turn; natural spoken language in the language/dialect the task requires (keep Egyptian/Saudi/etc. dialect, don't formalize). Short/medium sentences, punctuation for rhythm. Use ElevenLabs v3 audio tags like [laughs] [sighs] [softly] [excited] [hesitates] SPARINGLY and only when the emotion fits. No stage directions or evaluator notes inside the script. Test the real task objective (EQ, instruction following, conversational dynamics, topic switching, refusal-to-friendly, language learning, etc.), don't just discuss it. Follow the model's actual last reply; never repeat a question without reason. Respect the task's duration (use given minutes; defaults short 1-5 min ~4-5 exchanges, long 5-10 min ~8). Set done=true only when minimum duration reached, objective tested, and a natural closing line is the script. Never exceed max duration.
+If the script is not Arabic, put a natural Egyptian Arabic translation in "ar"; if it is Arabic, "ar" is "".
+On the FIRST turn only, min_min and max_min are the task's required conversation duration in minutes (use its exact numbers, e.g. 5-15; defaults: short 1-5, long 5-10). The app enforces durations: never end early. Always address the listener with the gender given each turn. Output STRICT JSON only, no markdown: {"summary":"task summary, scenario, language/dialect","min_min":number,"max_min":number,"script":"...","ar":"...","heard":"verbatim transcript of the audio reply you just heard (empty on first turn)","done":false}`;
+
+function gl(){const lg=$("lg").value;return `Gender: the listener (the AI voice you are talking to) is ${lg=="f"?"female":lg=="m"?"male":"unknown, so use neutral wording"}. Address them with the correct grammatical gender (addressing verbs, adjectives, pronouns, e.g. إنت/إنتِ); never mix.`}
+let S={m:"A",hist:[],t0:0,imgs:[],sum:"",stop:false,skip:false,openA:"",turns:0,run:0};
+const au=$("au"),err=m=>$("err").textContent=m||"";
+const ring=(t,c)=>{$("ring").textContent=t;$("ring").className=c||""};
+
+/* ---- images ---- */
+$("shot").onclick=()=>$("file").click();
+$("file").onchange=async e=>{
+ for(const f of e.target.files){S.imgs.push(await shrink(f))}
+ $("th").innerHTML=S.imgs.map(d=>`<img src="data:image/jpeg;base64,${d}">`).join("");
+ $("go").disabled=!S.imgs.length;$("file").value="";
+};
+function shrink(f){return new Promise(r=>{const i=new Image();i.onload=()=>{const k=Math.min(1,1600/Math.max(i.width,i.height)),c=document.createElement("canvas");c.width=i.width*k;c.height=i.height*k;c.getContext("2d").drawImage(i,0,0,c.width,c.height);r(c.toDataURL("image/jpeg",.85).split(",")[1])};i.src=URL.createObjectURL(f)})}
+
+/* ---- APIs ---- */
+async function gem(msgs,sys){
+ const contents=msgs.map(m=>({role:m.role=="assistant"?"model":"user",parts:typeof m.content=="string"?[{text:m.content}]:m.content.map(c=>c.type=="image"?{inlineData:{mimeType:"image/jpeg",data:c.source.data}}:c.type=="audio"?{inlineData:{mimeType:"audio/wav",data:c.data}}:{text:c.text})}));
+ const gc={responseMimeType:"application/json",maxOutputTokens:2000};if(/2\.5-flash/.test(L.s_cm||"gemini-2.5-flash"))gc.thinkingConfig={thinkingBudget:0};
+ const body=JSON.stringify({systemInstruction:{parts:[{text:sys}]},contents,generationConfig:gc});
+ const models=[L.s_cm||"gemini-2.5-flash","gemini-2.5-flash-lite"];let r;
+ for(let i=0;i<5;i++){
+  r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${models[i>=3?1:0]}:generateContent`,{method:"POST",headers:{"content-type":"application/json","x-goog-api-key":L.s_kA},body});
+  if(r.ok||![429,500,503].includes(r.status))break;
+  ring("Gemini مشغول، بحاول تاني… ("+(i+1)+")","on");await new Promise(z=>setTimeout(z,2000*(i+1)));
+ }
+ if(!r.ok)throw new Error("Gemini: "+await r.text());
+ const j=await r.json(),t=(j.candidates?.[0]?.content?.parts||[]).map(p=>p.text||"").join("").trim();
+ return JSON.parse(t.slice(t.indexOf("{"),t.lastIndexOf("}")+1));
+}
+async function claude(msgs,sys){
+ if(L.s_prov!="anthropic")return gem(msgs,sys);
+ const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"content-type":"application/json","x-api-key":L.s_kA,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+ body:JSON.stringify({model:L.s_cm||"claude-sonnet-4-6",max_tokens:1200,system:sys,messages:msgs})});
+ if(!r.ok)throw new Error("Claude: "+await r.text());
+ const t=(await r.json()).content.map(c=>c.text||"").join("").replace(/```json|```/g,"").trim();
+ return JSON.parse(t.slice(t.indexOf("{"),t.lastIndexOf("}")+1));
+}
+const cleanTTS=t=>String(t).replace(/[*_#`~>|]/g,"").replace(/\p{Extended_Pictographic}|\uFE0F/gu,"").replace(/[“”«»„]/g,"").replace(/…/g,"...").replace(/\s*\n+\s*/g," ").replace(/\s{2,}/g," ").trim();
+const tbody=t=>JSON.stringify({text:cleanTTS(t),model_id:L.s_em||"eleven_v3"});
+const thead=()=>({"xi-api-key":L.s_kE,"content-type":"application/json"});
+async function ttsBlob(text){
+ const r=await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${L.s_vid}?output_format=mp3_44100_64`,{method:"POST",headers:thead(),body:tbody(text)});
+ if(!r.ok)throw new Error("TTS: "+await r.text());
+ return URL.createObjectURL(await r.blob());
+}
+const canStream=()=>window.MediaSource&&MediaSource.isTypeSupported("audio/mpeg");
+function ttsStream(text){
+ const parts=[];let fin=false,fail=null,wake=null;const ping=()=>wake&&wake();
+ fetch(`https://api.elevenlabs.io/v1/text-to-speech/${L.s_vid}/stream?output_format=mp3_44100_64`,{method:"POST",headers:thead(),body:tbody(text)}).then(async r=>{
+  if(!r.ok)throw new Error("TTS: "+await r.text());
+  const rd=r.body.getReader();for(;;){const {done,value}=await rd.read();if(done)break;parts.push(value);ping()}
+  fin=true;ping();
+ }).catch(e=>{fail=e;ping()});
+ return {play(){return new Promise((ok,no)=>{
+  const ms=new MediaSource();au.src=URL.createObjectURL(ms);
+  au.onended=ok;au.onerror=()=>no(new Error("تشغيل الصوت فشل"));
+  ms.addEventListener("sourceopen",async()=>{
+   try{
+    const sb=ms.addSourceBuffer("audio/mpeg");let i=0;
+    const app=b=>new Promise(r=>{sb.addEventListener("updateend",r,{once:true});sb.appendBuffer(b)});
+    au.play().catch(no);
+    for(;;){
+     if(i<parts.length){await app(parts[i++]);continue}
+     if(fail){if(!parts.length){ttsBlob(text).then(speak).then(ok,no)}else no(fail);return}
+     if(fin){ms.endOfStream();return}
+     await new Promise(r=>wake=r);
+    }
+   }catch(e){no(e)}
+  });
+ })}};
+}
+async function tts(text){
+ if(canStream())return ttsStream(text);
+ const u=await ttsBlob(text);return {play:()=>speak(u)};
+}
+async function stt(blob){
+ const fd=new FormData();fd.append("file",blob,"a.webm");fd.append("model_id","scribe_v1");
+ const r=await fetch("https://api.elevenlabs.io/v1/speech-to-text",{method:"POST",headers:{"xi-api-key":L.s_kE},body:fd});
+ if(!r.ok)throw new Error("STT: "+await r.text());
+ return (await r.json()).text||"";
+}
+
+/* ---- speak / listen ---- */
+function speak(url){return new Promise((ok,no)=>{au.src=url;au.onended=ok;au.onerror=()=>no(new Error("تشغيل الصوت فشل"));au.play().catch(no)})}
+au.addEventListener("playing",()=>{if(S.tc){S.tm=`من نهاية كلامه لأول صوت: ${((performance.now()-S.tc)/1000).toFixed(1)}ث (AI ${S.ai}ث)`;S.tc=0;clock()}});
+let stream,ctx;
+async function mic(){
+ if(!ctx)ctx=new (window.AudioContext||window.webkitAudioContext)();
+ stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:true}});
+}
+function release(){
+ if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;
+ if(navigator.audioSession)navigator.audioSession.type="playback";
+}
+let gn=null;
+function setupGain(){
+ const g=+(L.s_gain||1);if(g<=1||gn)return;
+ const m=ctx.createMediaElementSource(au),c=ctx.createDynamicsCompressor();
+ gn=ctx.createGain();gn.gain.value=g;m.connect(gn);gn.connect(c);c.connect(ctx.destination);
+}
+async function toWav(blob){
+ const dc=await ctx.decodeAudioData((await blob.arrayBuffer()).slice(0));
+ const OC=window.OfflineAudioContext||window.webkitOfflineAudioContext,off=new OC(1,Math.max(1,Math.ceil(dc.duration*16000)),16000),sr=off.createBufferSource();
+ sr.buffer=dc;sr.connect(off.destination);sr.start();
+ const pcm=(await off.startRendering()).getChannelData(0),w=new DataView(new ArrayBuffer(44+pcm.length*2));
+ const st=(o,t)=>{for(let i=0;i<t.length;i++)w.setUint8(o+i,t.charCodeAt(i))};
+ st(0,"RIFF");w.setUint32(4,36+pcm.length*2,true);st(8,"WAVEfmt ");w.setUint32(16,16,true);w.setUint16(20,1,true);w.setUint16(22,1,true);w.setUint32(24,16000,true);w.setUint32(28,32000,true);w.setUint16(32,2,true);w.setUint16(34,16,true);st(36,"data");w.setUint32(40,pcm.length*2,true);
+ for(let i=0;i<pcm.length;i++)w.setInt16(44+i*2,Math.max(-1,Math.min(1,pcm[i]))*32767,true);
+ return new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result.split(",")[1]);f.readAsDataURL(new Blob([w.buffer],{type:"audio/wav"}))});
+}
+/* يحلل رد الموديل ويجهز الرد + الصوت */
+async function think(blob,cur,force){
+ const el=(Date.now()-S.t0)/60000,mins=el.toFixed(1);
+ let rule=el<S.min?"Minimum duration NOT reached: you MUST keep going with a fresh natural follow-up (done=false), never a closing line.":el>=S.max-0.5?"Maximum duration reached: write a short natural closing line now and set done=true.":"You may close naturally (done=true) only if the objective is fully tested; otherwise continue with a fresh follow-up.";
+ if(force=="continue")rule="Your previous reply tried to end too early. Minimum duration NOT reached: keep going with a fresh natural follow-up, done=false.";
+ if(force=="close")rule="Maximum duration reached: write a short natural closing line now, done=true.";
+ const meta=`${gl()} Duration: min ${S.min}, max ${S.max} min. Elapsed: ${mins} min, exchanges: ${S.turns}. ${rule} Write the next user turn.`;
+ const sys=SYS+"\nTASK CONTEXT: "+S.sum,base=[...S.hist,{role:"assistant",content:JSON.stringify(cur)}];
+ let o=null,heard="";const a=performance.now();
+ if(blob&&L.s_prov!="anthropic"){
+  try{const wav=await toWav(blob);o=await claude([...base,{role:"user",content:[{type:"audio",data:wav},{type:"text",text:`Model ${S.m} replied in the attached audio. Put a verbatim transcript in "heard". ${meta}`}]}],sys);heard=o.heard||""}catch(e){o=null}
+ }
+ if(!o){heard=blob?await stt(blob):"";o=await claude([...base,{role:"user",content:`Model ${S.m} replied (transcript): "${heard||"[no response / silence]"}"\n${meta}`}],sys)}
+ const ai=((performance.now()-a)/1000).toFixed(1),pl=await tts(o.script);
+ return {o,heard,pl,ai,hist:[{role:"assistant",content:JSON.stringify(cur)},{role:"user",content:`Model ${S.m} replied (transcript): "${heard||"[no response / silence]"}"\n${meta}`}]};
+}
+function listen(){return new Promise(async res=>{
+ if(navigator.audioSession)navigator.audioSession.type="play-and-record";await mic();await ctx.resume();
+ const an=ctx.createAnalyser();an.fftSize=1024;const src=ctx.createMediaStreamSource(stream);src.connect(an);
+ const buf=new Uint8Array(an.fftSize),ch=[],rec=new MediaRecorder(stream);
+ let spoke=false,last=0,floor=0,spec=null;const man=true;
+ rec.ondataavailable=e=>{if(e.data.size)ch.push(e.data)};
+ rec.onstop=()=>{clearInterval(iv);src.disconnect();release();res({blob:(spoke||man)?new Blob(ch,{type:rec.mimeType}):null,spec:spoke?spec:null})};
+ rec.start(250);
+ const t0=Date.now();
+ const iv=setInterval(()=>{
+  an.getByteTimeDomainData(buf);let s=0;for(const v of buf)s+=((v-128)/128)**2;const rms=Math.sqrt(s/buf.length),now=Date.now();
+  if(now-t0<600){floor=Math.max(floor,rms);return}
+  const thr=Math.max(.03,floor*2.5);
+  if(rms>thr){spoke=true;last=now;spec=null;$("ring").className="hear"}
+  else if(spoke&&!spec&&now-last>450&&!S.skip){spec=think(new Blob(ch,{type:rec.mimeType}),S.cur);spec.catch(()=>{})}
+  const end=S.skip||S.stop||(!man&&spoke&&now-last>1100)||(!man&&!spoke&&now-t0>45000)||now-t0>(man?600000:120000);
+  if(end){S.skip=false;if(rec.state!="inactive")rec.stop()}
+ },100);
+})}
+
+/* ---- flow ---- */
+const clock=()=>{const s=Math.floor((Date.now()-S.t0)/1000);$("clock").textContent=`${Math.floor(s/60)}:${String(s%60).padStart(2,"0")} · ${S.turns} تيرن`+(S.tm?"\n"+S.tm:"")};
+setInterval(()=>S.t0&&clock(),1000);
+function logTurn(label,o,heard){
+ const d=document.createElement("div");d.className="turn";
+ d.innerHTML=`<b>${label}</b><div class="me"></div>${o.ar?'<div class="ar"></div>':""}${heard!=null?'<div class="md"></div>':""}`;
+ d.querySelector(".me").textContent=o.script;if(o.ar)d.querySelector(".ar").textContent=o.ar;
+ $("log").prepend(d);return d;
+}
+$("go").onclick=async()=>{
+ if(!L.s_kA||!L.s_kE||!L.s_vid){$("cfg").open=true;return}
+ err();$("s1").classList.add("hide");$("s2").classList.remove("hide");$("s3").classList.remove("hide");
+ au.src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";au.play().catch(()=>{}); // unlock audio
+ try{
+  await mic();release();setupGain();ring("بحلل الـ task…","on");
+  const content=[...S.imgs.map(d=>({type:"image",source:{type:"base64",media_type:"image/jpeg",data:d}})),{type:"text",text:"Task screenshots above. "+gl()+" "+$("note").value+"\nAnalyze the task and write Model A Turn 1 now."}];
+  const o=await claude([{role:"user",content}],SYS);
+  S.sum=o.summary;S.openA=o.script;S.min=+$("mn").value||+o.min_min||1;S.max=Math.max(+$("mx").value||+o.max_min||5,S.min+0.5);await startModel("A",o);
+ }catch(e){err(e.message);ring("حصل خطأ")}
+};
+async function startModel(m,first){
+ S.m=m;S.hist=[];S.stop=false;S.turns=0;S.t0=Date.now();S.run++;const me=S.run;
+ $("mdl").textContent=`Model ${m} · المدة ${S.min}–${S.max} دقيقة`;$("nextB").classList.toggle("hide",m=="B");
+ let o=first,pl=null;
+ while(!S.stop&&me==S.run){
+  S.cur=o;
+  const d=logTurn(`Model ${m} — Turn ${S.turns+1}`,o);
+  if($("rev").checked){$("ed").value=o.script;$("edit").classList.remove("hide");ring("راجع النص");
+   await new Promise(r=>$("play").onclick=r);$("edit").classList.add("hide");o.script=$("ed").value;d.querySelector(".me").textContent=o.script;pl=null}
+  if(!pl){ring("بولّد الصوت…","on");pl=await tts(o.script)}
+  if(ctx)ctx.resume();
+  ring("بتكلم 🔊","on");await pl.play();S.turns++;clock();
+  if(o.done){ring("خلص ✓");break}
+  {const b=$("lis");b.classList.remove("hide");b.textContent="⏹ الرد خلص";b.onclick=()=>{S.skip=true}}
+  ring("بسمع رد الموديل 🎧");
+  const {blob,spec}=await listen();$("lis").classList.add("hide");if(S.stop||me!=S.run)break;
+  S.tc=performance.now();ring("بفكر في الرد…","on");
+  let r;try{r=spec?await spec:await think(blob,o)}catch(e){r=await think(blob,o)}
+  {const el=(Date.now()-S.t0)/60000;
+   if(r.o.done&&el<S.min){r=await think(blob,o,"continue");if(r.o.done)r.o.done=false}
+   else if(!r.o.done&&el>=S.max)r=await think(blob,o,"close")}
+  S.hist.push(...r.hist);S.ai=r.ai;
+  const md=document.createElement("div");md.className="md";md.textContent="🎧 "+(r.heard||"(مفيش رد)");d.append(md);
+  o=r.o;pl=r.pl;
+ }
+ if(m=="A"&&!S.stop&&me==S.run&&o.done){await switchB(true)}
+}
+async function switchB(wait){
+ S.stop=false;
+ if(wait){
+  const b=$("lis");b.classList.remove("hide");b.textContent="▶ ابدأ Model B";ring("A خلصت ✓ جاهز لـ B");
+  const run=S.run;await new Promise(r=>{S.wake=r;b.onclick=r});S.wake=null;b.classList.add("hide");
+  if(S.stop||run!=S.run)return;
+ }
+ ring("بجهّز Model B…","on");
+ const o=await claude([{role:"user",content:`${gl()} Model A is finished. Start Model B Turn 1 now: same objective, difficulty and language, but a genuinely DIFFERENT opening approach from this Model A opening: "${S.openA}"`}],SYS+"\nTASK CONTEXT: "+S.sum);
+ $("log").prepend(Object.assign(document.createElement("div"),{className:"turn",textContent:"— A خلصت. ابدأ B —"}));
+ await startModel("B",o);
+}
+$("stop").onclick=()=>{S.stop=true;S.wake&&S.wake();release();S.run++;au.pause();ring("متوقف");$("s1").classList.remove("hide")};
+$("nextB").onclick=async()=>{S.stop=true;S.wake&&S.wake();S.run++;au.pause();await new Promise(r=>setTimeout(r,300));try{await switchB()}catch(e){err(e.message)}};
+window.addEventListener("unhandledrejection",e=>err(e.reason&&e.reason.message||String(e.reason)));
+</script></body></html>
