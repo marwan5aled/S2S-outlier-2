@@ -1,0 +1,1790 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#09090b" />
+  <title>Live S2S Arena Studio</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Cairo', 'Inter', 'sans-serif'],
+            latin: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            obsidian: {
+              950: '#09090b',
+              900: '#111113',
+              850: '#18181b',
+              800: '#222226',
+              700: '#27272a',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      background-color: #09090b;
+      color: #f4f4f5;
+      font-family: 'Cairo', 'Inter', sans-serif;
+    }
+    .font-latin { font-family: 'Inter', sans-serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 9999px; }
+
+    @keyframes eqPulse {
+      0%, 100% { transform: scaleY(0.25); }
+      50% { transform: scaleY(1); }
+    }
+    .eq-bar {
+      transform-origin: bottom;
+      transition: transform 0.15s ease;
+    }
+    .speaking .eq-bar {
+      animation: eqPulse 0.6s infinite ease-in-out;
+    }
+    .speaking .eq-bar:nth-child(2n) { animation-delay: 0.12s; }
+    .speaking .eq-bar:nth-child(3n) { animation-delay: 0.24s; }
+    .speaking .eq-bar:nth-child(4n) { animation-delay: 0.36s; }
+    .speaking .eq-bar:nth-child(5n) { animation-delay: 0.48s; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col overflow-x-hidden antialiased selection:bg-zinc-700 selection:text-white">
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 hidden items-center gap-2.5 bg-zinc-900 border border-zinc-700 text-zinc-100 px-4 py-2.5 rounded-xl shadow-2xl text-xs font-medium max-w-[92vw]">
+    <span id="toast-dot" class="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0"></span>
+    <span id="toast-text" class="leading-relaxed">تم</span>
+  </div>
+
+  <!-- Hidden Audio Element for ElevenLabs Playback -->
+  <audio id="eleven-audio-player" playsinline class="hidden"></audio>
+
+  <!-- ===================================================================== -->
+  <!-- TOP HEADER BAR (2-VIEW NAVIGATION)                                    -->
+  <!-- ===================================================================== -->
+  <header class="sticky top-0 z-40 bg-obsidian-950/95 backdrop-blur-md border-b border-zinc-800/80 px-3 sm:px-5 py-2.5 flex items-center justify-between gap-2">
+    <!-- Brand -->
+    <div class="flex items-center gap-2">
+      <div class="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-white flex-shrink-0">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+        </svg>
+      </div>
+      <span class="hidden sm:inline font-latin font-semibold text-sm tracking-tight text-white">Live S2S Studio</span>
+    </div>
+
+    <!-- 2-View Switcher -->
+    <nav class="flex items-center bg-zinc-900 p-1 rounded-xl border border-zinc-800">
+      <button type="button" onclick="switchView('task')" id="nav-task" class="px-3.5 sm:px-4 py-1.5 rounded-lg text-xs font-bold bg-white text-zinc-950 transition">
+        التاسك (Task)
+      </button>
+      <button type="button" onclick="switchView('settings')" id="nav-settings" class="px-3.5 sm:px-4 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 transition">
+        الإعدادات (Settings)
+      </button>
+    </nav>
+
+    <!-- Active Model Pill -->
+    <div class="flex items-center gap-1.5 font-mono text-[11px] text-zinc-400">
+      <span id="top-model-badge" class="hidden md:inline px-2 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300">gemini-4-hydrogen</span>
+      <span id="top-11-badge" class="px-2 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300">eleven_v4</span>
+    </div>
+  </header>
+
+  <!-- ===================================================================== -->
+  <!-- VIEW 1: TASK WORKSPACE (MOBILE + DESKTOP RESPONSIVE)                  -->
+  <!-- ===================================================================== -->
+  <main id="view-task" class="flex-1 w-full max-w-[1600px] mx-auto p-3 sm:p-5 grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+    <!-- COLUMN 1: SCREENSHOT CAPTURE & TASK PROFILE (3 Cols) -->
+    <section class="lg:col-span-3 flex flex-col gap-4">
+      <div class="bg-obsidian-900 border border-zinc-800/80 rounded-2xl p-4 space-y-3">
+        <div class="flex items-center justify-between gap-2">
+          <div>
+            <h2 class="text-sm font-bold text-white">1. صوّر التاسك للبدء التلقائي</h2>
+            <p class="text-[11px] text-zinc-400 mt-0.5">صوّر الشاشة بكاميرا الموبايل أو ارفع صورة أو اعمل Ctrl+V — وهيحللها ويتكلم فوراً.</p>
+          </div>
+          <button type="button" onclick="resetCurrentTask()" class="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[11px] text-zinc-300 flex-shrink-0 transition">
+            تاسك جديد
+          </button>
+        </div>
+
+        <!-- Hidden File Inputs -->
+        <input id="camera-input" type="file" accept="image/*" capture="environment" class="hidden" onchange="handleImageFile(this.files[0])" />
+        <input id="gallery-input" type="file" accept="image/*" class="hidden" onchange="handleImageFile(this.files[0])" />
+
+        <!-- Primary Mobile Camera Button -->
+        <button type="button" onclick="document.getElementById('camera-input').click()" class="w-full py-3 px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/>
+          </svg>
+          <span>صوّر التاسك بالكاميرا</span>
+        </button>
+
+        <!-- Secondary Gallery / Ctrl+V Button -->
+        <button type="button" onclick="document.getElementById('gallery-input').click()" class="w-full py-2.5 px-4 rounded-xl bg-obsidian-950 hover:bg-zinc-900 border border-zinc-800 text-zinc-200 font-semibold text-xs flex items-center justify-center gap-2 transition">
+          <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
+          </svg>
+          <span>اختيار صورة / لصق Ctrl+V</span>
+        </button>
+
+        <!-- Image Preview -->
+        <div id="screenshot-preview-wrap" class="hidden relative rounded-xl overflow-hidden border border-zinc-800 bg-obsidian-950">
+          <img id="screenshot-preview-img" src="" alt="Task Preview" class="w-full max-h-44 object-contain bg-black" />
+          <div id="analyzing-overlay" class="hidden absolute inset-0 bg-black/75 backdrop-blur-xs flex flex-col items-center justify-center gap-2 p-3 text-center">
+            <div class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            <span id="analyzing-status-text" class="text-xs font-semibold text-white">جاري تحليل التاسك وتوليد Turn 1...</span>
+          </div>
+        </div>
+
+        <!-- Listener Gender Selector (Important for Arabic grammar إنت / إنتِ) -->
+        <div class="pt-2 border-t border-zinc-800/80 space-y-1.5">
+          <div class="flex items-center justify-between text-[11px] text-zinc-400">
+            <span>صوت الموديل اللي بتكلمه (لضبط التذكير والتأنيث)</span>
+          </div>
+          <div class="grid grid-cols-3 gap-1.5 bg-obsidian-950 p-1 rounded-xl border border-zinc-800" id="gender-selector">
+            <button type="button" onclick="setListenerGender('m')" id="gen-m" class="py-1.5 rounded-lg text-xs font-semibold bg-zinc-800 text-white transition">راجل</button>
+            <button type="button" onclick="setListenerGender('f')" id="gen-f" class="py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white transition">بنت</button>
+            <button type="button" onclick="setListenerGender('auto')" id="gen-auto" class="py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white transition">محايد</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Extracted Task Profile Card -->
+      <div id="task-profile-card" class="bg-obsidian-900 border border-zinc-800/80 rounded-2xl p-4 space-y-2.5 text-xs">
+        <div class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+          <span class="font-bold text-zinc-200">ملخص التاسك المستخرج</span>
+          <span id="meta-bucket" class="font-mono text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-300">بانتظار الصورة</span>
+        </div>
+        <div class="space-y-2">
+          <div class="flex justify-between gap-2">
+            <span class="text-zinc-500">السيناريو:</span>
+            <span id="meta-title" class="text-zinc-200 font-medium text-left">—</span>
+          </div>
+          <div class="flex justify-between gap-2">
+            <span class="text-zinc-500">أولوية التقييم:</span>
+            <span id="meta-priority" class="font-mono text-[11px] text-zinc-200 text-left" dir="ltr">—</span>
+          </div>
+          <div class="flex justify-between gap-2">
+            <span class="text-zinc-500">اللغة / اللهجة:</span>
+            <span id="meta-dialect" class="text-zinc-200 text-left">—</span>
+          </div>
+          <div class="flex justify-between gap-2">
+            <span class="text-zinc-500">المدة المطلوبة:</span>
+            <span id="meta-duration" class="font-mono text-zinc-200" dir="ltr">—</span>
+          </div>
+          <div class="flex justify-between gap-2">
+            <span class="text-zinc-500">أقل عدد أدوار:</span>
+            <span id="meta-minturns" class="font-mono text-zinc-200" dir="ltr">—</span>
+          </div>
+        </div>
+        <div id="meta-objective-wrap" class="hidden pt-2 border-t border-zinc-800/80">
+          <div class="text-[11px] text-zinc-500 mb-1">الهدف والمهارات المختبرة:</div>
+          <p id="meta-objective" class="text-xs text-zinc-300 leading-relaxed"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- COLUMN 2: LIVE AUTOMATED CONSOLE (6 Cols) -->
+    <section class="lg:col-span-6 flex flex-col gap-4">
+      <!-- Model Switcher & Timer Bar -->
+      <div class="bg-obsidian-900 border border-zinc-800/80 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-2.5">
+        <div class="flex items-center gap-1.5 bg-obsidian-950 p-1 rounded-xl border border-zinc-800">
+          <button type="button" onclick="switchActiveModel('A')" id="tab-model-A" class="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-zinc-800 text-white flex items-center gap-1.5 transition">
+            <span id="dot-model-A" class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+            <span>Model A</span>
+          </button>
+          <button type="button" onclick="switchActiveModel('B')" id="tab-model-B" class="px-3.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 flex items-center gap-1.5 transition">
+            <span id="dot-model-B" class="w-1.5 h-1.5 rounded-full bg-zinc-600"></span>
+            <span>Model B</span>
+          </button>
+        </div>
+
+        <div class="flex items-center gap-3 font-mono text-xs">
+          <span class="text-zinc-400">Turns: <strong id="turn-counter-text" class="text-white">0 / 3</strong></span>
+          <div class="flex items-center gap-2 bg-obsidian-950 px-3 py-1.5 rounded-xl border border-zinc-800">
+            <span id="timer-gate-dot" class="w-2 h-2 rounded-full bg-zinc-500"></span>
+            <span id="timer-text" class="text-sm font-semibold text-white">00:00</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Smart Transition Banner (Model A -> Model B -> Evaluation) -->
+      <div id="transition-banner" class="hidden bg-obsidian-900 border border-zinc-700 rounded-2xl px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <p id="transition-banner-msg" class="text-xs sm:text-sm font-semibold text-zinc-100">
+          تم استيفاء مدة وأهداف Model A — نقدر ننتقل دلوقتي إلى Model B
+        </p>
+        <button type="button" onclick="handleModelTransition()" id="btn-transition-action" class="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-bold transition">
+          A خلصت. ابدأ B ➔
+        </button>
+      </div>
+
+      <!-- Active Spoken Script & ElevenLabs Auto-Loop Card -->
+      <div class="bg-obsidian-900 border border-zinc-800/80 rounded-2xl p-4 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span id="active-turn-label" class="font-mono text-xs font-semibold text-zinc-200">Model A — جاهز</span>
+            <span id="loop-status-pill" class="text-[11px] px-2 py-0.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-400">في الانتظار</span>
+          </div>
+          <label class="inline-flex items-center gap-2 text-xs text-zinc-300 cursor-pointer select-none">
+            <input type="checkbox" id="auto-loop-toggle" checked class="rounded bg-zinc-900 border-zinc-700 accent-white" />
+            <span>تحدث + استماع تلقائي</span>
+          </label>
+        </div>
+
+        <!-- Spoken Script Textarea -->
+        <div class="relative">
+          <textarea id="current-script-box" rows="3" placeholder="سيظهر هنا النص الجاهز للنطق تلقائياً بمجرد تصوير التاسك..." class="w-full bg-obsidian-950 border border-zinc-800 focus:border-zinc-600 rounded-xl p-3.5 text-base sm:text-lg text-white leading-relaxed focus:outline-none resize-none"></textarea>
+          <button type="button" onclick="copyCurrentScript()" class="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[11px] text-zinc-400 hover:text-white transition">
+            نسخ
+          </button>
+        </div>
+
+        <!-- Arabic Translation Box (Shown automatically when script is non-Arabic) -->
+        <div id="translation-wrap" class="hidden bg-obsidian-950 border border-zinc-800/80 rounded-xl p-3 text-xs text-zinc-300">
+          <div class="text-[10px] text-zinc-500 mb-1">الترجمة العربية:</div>
+          <p id="translation-text" class="leading-relaxed"></p>
+        </div>
+
+        <!-- Playback & Controls Row -->
+        <div class="flex flex-wrap items-center justify-between gap-2.5 pt-1">
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="speakCurrentScript()" id="btn-speak" class="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-bold flex items-center gap-1.5 transition">
+              <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              <span id="btn-speak-label">نطق (eleven_v4)</span>
+            </button>
+            <button type="button" onclick="stopAllAudioAndMic()" class="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs text-zinc-300 transition">
+              إيقاف
+            </button>
+          </div>
+
+          <!-- Minimal Equalizer -->
+          <div id="equalizer-bars" class="flex-1 min-w-[80px] h-5 flex items-end justify-center gap-1">
+            <span class="eq-bar w-0.5 h-3 bg-zinc-500 rounded-full"></span>
+            <span class="eq-bar w-0.5 h-5 bg-zinc-300 rounded-full"></span>
+            <span class="eq-bar w-0.5 h-3 bg-zinc-500 rounded-full"></span>
+            <span class="eq-bar w-0.5 h-5 bg-zinc-200 rounded-full"></span>
+            <span class="eq-bar w-0.5 h-4 bg-zinc-400 rounded-full"></span>
+            <span class="eq-bar w-0.5 h-3 bg-zinc-500 rounded-full"></span>
+            <span class="eq-bar w-0.5 h-5 bg-zinc-300 rounded-full"></span>
+          </div>
+
+          <!-- Quick Transition Button (Always accessible) -->
+          <button type="button" onclick="handleModelTransition()" id="btn-quick-switch" class="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-semibold text-zinc-200 transition">
+            انتقل لـ Model B
+          </button>
+        </div>
+      </div>
+
+      <!-- Conversation Transcript & Model Reply Bar -->
+      <div class="bg-obsidian-900 border border-zinc-800/80 rounded-2xl p-4 flex-1 flex flex-col min-h-[240px]">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-semibold text-zinc-400">سجل المحادثة — <strong id="log-active-model" class="text-white">Model A</strong></span>
+          <button type="button" onclick="toggleManualMicListening()" id="btn-mic-toggle" class="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[11px] text-zinc-300 flex items-center gap-1.5 transition">
+            <span id="mic-dot" class="w-1.5 h-1.5 rounded-full bg-zinc-500"></span>
+            <span id="mic-btn-label">تشغيل المايك للاستماع</span>
+          </button>
+        </div>
+
+        <div id="transcript-feed" class="flex-1 overflow-y-auto space-y-3 pr-1 max-h-[260px]">
+          <div class="text-center py-8 text-xs text-zinc-500">
+            صوّر التاسك أو ارفع سكرين شوت للبدء تلقائياً.
+          </div>
+        </div>
+
+        <!-- Model Response Input (Filled automatically by Mic OR manually typed) -->
+        <div class="mt-3 pt-3 border-t border-zinc-800/80 flex items-center gap-2">
+          <input id="model-reply-input" type="text" placeholder="رد الموديل يظهر هنا تلقائياً بالمايك أو اكتبه يدوياً واضغط Enter..." class="flex-1 bg-obsidian-950 border border-zinc-800 focus:border-zinc-600 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none" onkeydown="if(event.key==='Enter') submitModelReply()" />
+          <button type="button" onclick="submitModelReply()" id="btn-submit-reply" class="px-4 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-bold flex-shrink-0 transition">
+            التالي
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- COLUMN 3: OFFICIAL EVIDENCE LOGGER & RATIONALE BUILDER (3 Cols) -->
+    <section class="lg:col-span-3 flex flex-col bg-obsidian-900 border border-zinc-800/80 rounded-2xl overflow-hidden">
+      <div class="grid grid-cols-2 bg-obsidian-950 border-b border-zinc-800/80 p-1 gap-1">
+        <button type="button" onclick="switchRightTab('issues')" id="rtab-issues" class="py-2 rounded-lg text-xs font-semibold bg-zinc-800 text-white transition">
+          الملاحظات والأخطاء
+        </button>
+        <button type="button" onclick="switchRightTab('rating')" id="rtab-rating" class="py-2 rounded-lg text-xs font-medium text-zinc-400 hover:text-white transition">
+          التقييم والـ Rationale
+        </button>
+      </div>
+
+      <!-- SUB-TAB 1: LIVE ISSUES & 14 ERROR CLUSTERS -->
+      <div id="rpanel-issues" class="p-4 flex-1 flex flex-col gap-3.5 overflow-y-auto max-h-[760px]">
+        <div class="flex items-center justify-between text-xs">
+          <span class="text-zinc-400">تسجيل لـ: <strong id="issues-active-model" class="text-white">Model A</strong></span>
+          <span class="text-[11px] text-zinc-500">يُختم بالوقت تلقائياً</span>
+        </div>
+
+        <!-- Audio Quality Defects -->
+        <div class="space-y-1.5">
+          <div class="text-[11px] font-medium text-zinc-400">عيوب جودة الصوت (Audio Quality)</div>
+          <div class="flex flex-wrap gap-1.5" dir="ltr">
+            <button type="button" onclick="logIssue('Ticks / Clicks', 'aq')" class="text-[11px] px-2.5 py-1 rounded-lg bg-obsidian-950 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 transition">Ticks / Clicks</button>
+            <button type="button" onclick="logIssue('Harsh Sibilance', 'aq')" class="text-[11px] px-2.5 py-1 rounded-lg bg-obsidian-950 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 transition">Harsh Sibilance</button>
+            <button type="button" onclick="logIssue('Metallic Breathing', 'aq')" class="text-[11px] px-2.5 py-1 rounded-lg bg-obsidian-950 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 transition">Metallic Breathing</button>
+            <button type="button" onclick="logIssue('Cut-Off Speech', 'aq')" class="text-[11px] px-2.5 py-1 rounded-lg bg-obsidian-950 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 transition">Cut-Off Speech</button>
+            <button type="button" onclick="logIssue('Persona Shift', 'aq')" class="text-[11px] px-2.5 py-1 rounded-lg bg-obsidian-950 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 transition">Persona Shift</button>
+            <button type="button" onclick="logIssue('Distorted Speech', 'aq')" class="text-[11px] px-2.5 py-1 rounded-lg bg-obsidian-950 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 transition">Distorted Speech</button>
+          </div>
+        </div>
+
+        <!-- 14 Official Error Clusters -->
+        <div class="space-y-1.5 pt-2 border-t border-zinc-800/80">
+          <div class="text-[11px] font-medium text-zinc-400">مجموعات الأخطاء الرسمية (14 Clusters)</div>
+          <div class="flex gap-1.5" dir="ltr">
+            <select id="official-cluster-select" class="flex-1 bg-obsidian-950 border border-zinc-800 rounded-xl px-2.5 py-2 text-xs text-zinc-200 focus:outline-none">
+              <optgroup label="Model Generation">
+                <option value="Bridging Quality">Bridging Quality</option>
+                <option value="Looping/LLMism">Looping/LLMism</option>
+                <option value="Interrupted User">Interrupted User</option>
+                <option value="Instruction Following Quality">Instruction Following Quality</option>
+                <option value="Inaccuracy">Inaccuracy / Hallucination</option>
+                <option value="Anthropomorphism">Anthropomorphism</option>
+                <option value="Failed Correction">Failed Correction</option>
+                <option value="Overacted">Overacted</option>
+                <option value="Wrong Language">Wrong Language</option>
+              </optgroup>
+              <optgroup label="Model Discrimination">
+                <option value="Bad ASR/Misunderstanding">Bad ASR / Misunderstanding</option>
+                <option value="Latency">Latency</option>
+              </optgroup>
+              <optgroup label="i18n Only">
+                <option value="Not Locally Relevant">Not Locally Relevant</option>
+                <option value="Wrong Accent/Variant">Wrong Accent / Variant</option>
+                <option value="Wrong Gender">Wrong Gender</option>
+              </optgroup>
+            </select>
+            <button type="button" onclick="logSelectedCluster()" class="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-semibold transition">
+              Flag
+            </button>
+          </div>
+        </div>
+
+        <!-- Custom Observation / #newerror -->
+        <div class="flex gap-1.5">
+          <input id="custom-issue-input" type="text" placeholder="أضف ملاحظة أو #newerror..." class="flex-1 bg-obsidian-950 border border-zinc-800 focus:border-zinc-600 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none" onkeydown="if(event.key==='Enter') logCustomIssue()" />
+          <button type="button" onclick="logCustomIssue()" class="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-white transition">إضافة</button>
+        </div>
+
+        <!-- Logged Issues Feed -->
+        <div id="issues-log-list" class="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[120px]">
+          <div class="text-center py-6 text-[11px] text-zinc-500">لا توجد ملاحظات مسجلة بعد.</div>
+        </div>
+      </div>
+
+      <!-- SUB-TAB 2: OFFICIAL RATING & RATIONALE GENERATOR -->
+      <div id="rpanel-rating" class="hidden p-4 flex-1 flex flex-col gap-3 overflow-y-auto max-h-[760px] text-xs" dir="ltr">
+        <div class="space-y-2.5">
+          <!-- NEA -->
+          <div class="bg-obsidian-950 border border-zinc-800 rounded-xl p-2.5">
+            <div class="text-[11px] font-medium text-zinc-300 mb-1.5">Naturalness / Engagement / Aesthetics</div>
+            <div class="grid grid-cols-2 gap-1.5">
+              <button type="button" onclick="setRating('nea', 'Response A', this)" class="rate-btn py-1.5 rounded-lg bg-white text-zinc-950 font-semibold text-[11px]">Response A</button>
+              <button type="button" onclick="setRating('nea', 'Response B', this)" class="rate-btn py-1.5 rounded-lg bg-zinc-900 text-zinc-400 border border-zinc-800 text-[11px]">Response B</button>
+            </div>
+          </div>
+
+          <!-- Utility -->
+          <div class="bg-obsidian-950 border border-zinc-800 rounded-xl p-2.5">
+            <div class="text-[11px] font-medium text-zinc-300 mb-1.5">Utility</div>
+            <div class="grid grid-cols-2 gap-1.5">
+              <button type="button" onclick="setRating('utility', 'Response A', this)" class="rate-btn py-1.5 rounded-lg bg-white text-zinc-950 font-semibold text-[11px]">Response A</button>
+              <button type="button" onclick="setRating('utility', 'Response B', this)" class="rate-btn py-1.5 rounded-lg bg-zinc-900 text-zinc-400 border border-zinc-800 text-[11px]">Response B</button>
+              <button type="button" onclick="setRating('utility', 'Both Good', this)" class="rate-btn py-1.5 rounded-lg bg-zinc-900 text-zinc-400 border border-zinc-800 text-[11px]">Both Good</button>
+              <button type="button" onclick="setRating('utility', 'Both Bad', this)" class="rate-btn py-1.5 rounded-lg bg-zinc-900 text-zinc-400 border border-zinc-800 text-[11px]">Both Bad</button>
+            </div>
+          </div>
+
+          <!-- Conversational Dynamics -->
+          <div class="bg-obsidian-950 border border-zinc-800 rounded-xl p-2.5">
+            <div class="text-[11px] font-medium text-zinc-300 mb-1.5">Conversational Dynamics</div>
+            <div class="grid grid-cols-4 gap-1">
+              <button type="button" onclick="setRating('cd', 'Response A', this)" class="rate-btn py-1.5 rounded-lg bg-zinc-900 text-zinc-400 border border-zinc-800 text-[10px]">Resp A</button>
+              <button type="button" onclick="setRating('cd', 'Response B', this)" class="rate-btn py-1.5 rounded-lg bg-zinc-900 text-zinc-400 border border-zinc-800 text-[10px]">Resp B</button>
+              <button type="button" onclick="setRating('cd', 'Tie', this)" class="rate-btn py-1.5 rounded-lg bg-white text-zinc-950 font-semibold text-[10px]">Tie</button>
+              <button type="button" onclick="setRating('cd', 'Skip', this)" class="rate-btn py-1.5 rounded-lg bg-zinc-900 text-zinc-400 border border-zinc-800 text-[10px]">Skip</button>
+            </div>
+          </div>
+
+          <!-- Audio Quality -->
+          <div class="bg-obsidian-950 border border-zinc-800 rounded-xl p-2.5">
+            <div class="text-[11px] font-medium text-zinc-300 mb-1.5">Audio Quality (Model Output Only)</div>
+            <div class="grid grid-cols-2 gap-1.5">
+              <button type="button" onclick="setRating('aq', 'Response A', this)" class="rate-btn py-1.5 rounded-lg bg-zinc-900 text-zinc-400 border border-zinc-800 text-[11px]">Response A</button>
+              <button type="button" onclick="setRating('aq', 'Response B', this)" class="rate-btn py-1.5 rounded-lg bg-zinc-900 text-zinc-400 border border-zinc-800 text-[11px]">Response B</button>
+              <button type="button" onclick="setRating('aq', 'Both Good', this)" class="rate-btn py-1.5 rounded-lg bg-white text-zinc-950 font-semibold text-[11px]">Both Good</button>
+              <button type="button" onclick="setRating('aq', 'Both Bad', this)" class="rate-btn py-1.5 rounded-lg bg-zinc-900 text-zinc-400 border border-zinc-800 text-[11px]">Both Bad</button>
+            </div>
+          </div>
+
+          <!-- Task Success -->
+          <div class="bg-obsidian-950 border border-zinc-800 rounded-xl p-2.5 space-y-2">
+            <div class="text-[11px] font-medium text-zinc-300">Task Success</div>
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-[11px] font-mono text-zinc-400">Model A:</span>
+              <div class="grid grid-cols-3 gap-1 flex-1">
+                <button type="button" onclick="setRating('tsA', 'Pass', this)" class="rate-btn py-1 rounded bg-white text-zinc-950 font-semibold text-[10px]">Pass</button>
+                <button type="button" onclick="setRating('tsA', 'Partial', this)" class="rate-btn py-1 rounded bg-zinc-900 text-zinc-400 border border-zinc-800 text-[10px]">Partial</button>
+                <button type="button" onclick="setRating('tsA', 'Fail', this)" class="rate-btn py-1 rounded bg-zinc-900 text-zinc-400 border border-zinc-800 text-[10px]">Fail</button>
+              </div>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-[11px] font-mono text-zinc-400">Model B:</span>
+              <div class="grid grid-cols-3 gap-1 flex-1">
+                <button type="button" onclick="setRating('tsB', 'Pass', this)" class="rate-btn py-1 rounded bg-white text-zinc-950 font-semibold text-[10px]">Pass</button>
+                <button type="button" onclick="setRating('tsB', 'Partial', this)" class="rate-btn py-1 rounded bg-zinc-900 text-zinc-400 border border-zinc-800 text-[10px]">Partial</button>
+                <button type="button" onclick="setRating('tsB', 'Fail', this)" class="rate-btn py-1 rounded bg-zinc-900 text-zinc-400 border border-zinc-800 text-[10px]">Fail</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Overall Preference -->
+          <div class="bg-obsidian-950 border border-zinc-700 rounded-xl p-2.5">
+            <div class="text-[11px] font-semibold text-white mb-1.5">Overall Preference</div>
+            <div class="grid grid-cols-2 gap-1.5">
+              <button type="button" onclick="setRating('overall', 'Response A', this)" class="rate-btn py-1.5 rounded-lg bg-white text-zinc-950 font-semibold text-[11px]">Response A</button>
+              <button type="button" onclick="setRating('overall', 'Response B', this)" class="rate-btn py-1.5 rounded-lg bg-zinc-900 text-zinc-400 border border-zinc-800 text-[11px]">Response B</button>
+            </div>
+          </div>
+        </div>
+
+        <button type="button" onclick="generateOfficialRationale()" id="btn-gen-rationale" class="w-full py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs transition">
+          Generate Official English Rationale
+        </button>
+
+        <div class="relative flex-1 flex flex-col min-h-[190px]">
+          <button type="button" onclick="copyRationale()" class="absolute top-2 right-2 px-2.5 py-1 rounded bg-zinc-900 hover:bg-zinc-800 text-[10px] font-medium text-zinc-300 border border-zinc-800">
+            Copy
+          </button>
+          <textarea id="rationale-output" rows="9" placeholder="Official English Rationale will appear here..." class="w-full flex-1 bg-obsidian-950 border border-zinc-800 rounded-xl p-3 pt-8 font-mono text-[11px] text-zinc-200 leading-relaxed focus:outline-none"></textarea>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- VIEW 2: API & VOICE SETTINGS (PERSISTED IN LOCALSTORAGE)              -->
+  <!-- ===================================================================== -->
+  <section id="view-settings" class="hidden flex-1 w-full max-w-4xl mx-auto p-4 sm:p-6 space-y-5" dir="ltr">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="text-lg font-bold text-white font-latin">API & Voice Configuration</h2>
+        <p class="text-xs text-zinc-400 mt-0.5 font-latin">Configure your Gemini model, ElevenLabs v4 model, and Cloned Voice ID.</p>
+      </div>
+      <button type="button" onclick="saveSettings(true)" class="px-5 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-bold transition">
+        Save & Return
+      </button>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <!-- Card 1: AI Brain -->
+      <div class="bg-obsidian-900 border border-zinc-800/80 rounded-2xl p-5 space-y-4">
+        <div class="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+          <h3 class="text-sm font-semibold text-white font-latin">1. AI Brain (Gemini / LLM)</h3>
+          <button type="button" onclick="testGeminiConnection()" class="text-xs text-zinc-300 hover:text-white underline">Test Connection</button>
+        </div>
+
+        <div class="space-y-3 text-xs font-latin">
+          <div>
+            <label class="block text-zinc-400 mb-1">Provider</label>
+            <select id="cfg-provider" class="w-full bg-obsidian-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-zinc-600">
+              <option value="gemini" selected>Google Gemini (Vision + Text)</option>
+              <option value="openai">OpenAI (GPT-4o / 4.1)</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-zinc-400 mb-1">API Key</label>
+            <div class="relative">
+              <input id="cfg-ai-key" type="password" placeholder="AIza... or AQ..." class="w-full bg-obsidian-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 font-mono text-zinc-200 pr-14 focus:outline-none focus:border-zinc-600" />
+              <button type="button" onclick="toggleSecret('cfg-ai-key', this)" class="absolute right-3 top-2.5 text-[11px] text-zinc-400 hover:text-white">Show</button>
+            </div>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="text-zinc-400">Model</label>
+              <button type="button" onclick="fetchGeminiModelsFromAPI()" class="text-[11px] text-zinc-400 hover:text-white underline">Fetch Models</button>
+            </div>
+            <select id="cfg-ai-model-select" onchange="document.getElementById('cfg-ai-model').value = this.value" class="w-full bg-obsidian-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 font-mono text-white focus:outline-none mb-2">
+              <optgroup label="Google Gemini (Working Models)">
+                <option value="gemini-4-hydrogen" selected>gemini-4-hydrogen (Best Context + Free)</option>
+                <option value="gemini-3.8-flash">gemini-3.8-flash (Balanced & Fast)</option>
+                <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (Fastest & Lightest)</option>
+                <option value="gemini-4-neon">gemini-4-neon</option>
+                <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+                <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+              </optgroup>
+              <optgroup label="OpenAI">
+                <option value="gpt-4o">gpt-4o</option>
+                <option value="gpt-4.1">gpt-4.1</option>
+              </optgroup>
+            </select>
+            <input id="cfg-ai-model" type="text" value="gemini-4-hydrogen" placeholder="Or type any custom Model ID..." class="w-full bg-obsidian-950 border border-zinc-800 rounded-xl px-3.5 py-2 font-mono text-xs text-zinc-200 focus:outline-none focus:border-zinc-600" />
+          </div>
+
+          <label class="flex items-center gap-2 text-zinc-300 pt-1 cursor-pointer">
+            <input type="checkbox" id="cfg-auto-fallback" checked class="rounded bg-zinc-900 border-zinc-700 accent-white" />
+            <span>Auto-Fallback if a model is busy or unavailable</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Card 2: ElevenLabs -->
+      <div class="bg-obsidian-900 border border-zinc-800/80 rounded-2xl p-5 space-y-4">
+        <div class="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+          <h3 class="text-sm font-semibold text-white font-latin">2. ElevenLabs Cloned Voice</h3>
+          <button type="button" onclick="testElevenLabsVoice()" class="text-xs text-zinc-300 hover:text-white underline">Test Cloned Voice</button>
+        </div>
+
+        <div class="space-y-3 text-xs font-latin">
+          <div>
+            <label class="block text-zinc-400 mb-1">ElevenLabs API Key</label>
+            <div class="relative">
+              <input id="cfg-11-key" type="password" placeholder="sk_..." class="w-full bg-obsidian-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 font-mono text-zinc-200 pr-14 focus:outline-none focus:border-zinc-600" />
+              <button type="button" onclick="toggleSecret('cfg-11-key', this)" class="absolute right-3 top-2.5 text-[11px] text-zinc-400 hover:text-white">Show</button>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-zinc-400 mb-1">Custom Cloned Voice ID (voice_id)</label>
+            <input id="cfg-voice-id" type="text" placeholder="Paste your cloned Voice ID here..." class="w-full bg-obsidian-950 border border-zinc-700 rounded-xl px-3.5 py-2.5 font-mono text-sm text-white focus:outline-none focus:border-white" />
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-zinc-400 mb-1">ElevenLabs Model</label>
+              <select id="cfg-11-model" class="w-full bg-obsidian-950 border border-zinc-800 rounded-xl px-3 py-2.5 font-mono text-white focus:outline-none">
+                <option value="eleven_v4" selected>eleven_v4</option>
+                <option value="eleven_v4_turbo">eleven_v4_turbo</option>
+                <option value="eleven_v3">eleven_v3</option>
+                <option value="eleven_multilingual_v2">eleven_multilingual_v2</option>
+                <option value="eleven_flash_v2_5">eleven_flash_v2_5</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-zinc-400 mb-1">Output Device</label>
+              <select id="cfg-output-device" class="w-full bg-obsidian-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-zinc-200 focus:outline-none">
+                <option value="default">Default Speakers / Cable</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Voice Performance Sliders -->
+          <div class="grid grid-cols-3 gap-2.5 pt-1">
+            <div class="bg-obsidian-950 border border-zinc-800 rounded-xl p-2">
+              <div class="flex justify-between text-[10px] mb-1"><span class="text-zinc-500">Stability</span><span id="lbl-stab" class="font-mono text-zinc-200">0.50</span></div>
+              <input id="cfg-stability" type="range" min="0" max="100" value="50" oninput="document.getElementById('lbl-stab').textContent=(this.value/100).toFixed(2)" class="w-full accent-white" />
+            </div>
+            <div class="bg-obsidian-950 border border-zinc-800 rounded-xl p-2">
+              <div class="flex justify-between text-[10px] mb-1"><span class="text-zinc-500">Similarity</span><span id="lbl-sim" class="font-mono text-zinc-200">0.85</span></div>
+              <input id="cfg-similarity" type="range" min="0" max="100" value="85" oninput="document.getElementById('lbl-sim').textContent=(this.value/100).toFixed(2)" class="w-full accent-white" />
+            </div>
+            <div class="bg-obsidian-950 border border-zinc-800 rounded-xl p-2">
+              <div class="flex justify-between text-[10px] mb-1"><span class="text-zinc-500">Speed</span><span id="lbl-speed" class="font-mono text-zinc-200">1.00x</span></div>
+              <input id="cfg-speed" type="range" min="70" max="120" value="100" oninput="document.getElementById('lbl-speed').textContent=(this.value/100).toFixed(2)+'x'" class="w-full accent-white" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 3: Master System Prompt -->
+    <div class="bg-obsidian-900 border border-zinc-800/80 rounded-2xl p-5 space-y-3 font-latin">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-semibold text-white">3. Master S2S System Prompt (Official Guidelines)</h3>
+        <button type="button" onclick="resetMasterPrompt()" class="text-xs text-zinc-400 hover:text-white underline">Reset Default</button>
+      </div>
+      <textarea id="cfg-master-prompt" rows="5" class="w-full bg-obsidian-950 border border-zinc-800 rounded-xl p-3 font-mono text-xs text-zinc-300 leading-relaxed focus:outline-none focus:border-zinc-600"></textarea>
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <!-- COMPLETE APPLICATION ENGINE (ZERO MOCK DATA)                          -->
+  <!-- ===================================================================== -->
+  <script>
+    const STORAGE_KEY = 'live_s2s_studio_config_v2';
+
+    const DEFAULT_MASTER_PROMPT = `Live S2S Arena — Master Preparation, Adaptive Conversation & Official Evaluation Prompt (Multilingual-260310-live-s2s-elo)
+
+1. ROLE & NORTH STAR
+Act as a professional Live Speech-to-Speech (S2S) Evaluation Assistant, Conversation Designer, and Comparative Quality Analyst. Follow official project guidelines and task screenshots (SCENARIO, WHAT TO DO, SKILLS TESTED) as the highest authority.
+Create spontaneous, natural, realistic human speech in the exact requested language and dialect. Never invent rating scales or duration limits.
+
+2. SCENARIO CLASSIFICATION & PRIORITY MATRIX
+Extract from the task screenshot:
+- scenarioBucket: "EQ-focused" | "IQ-focused" | "Hybrid / Structural" | "Endpointing / CD"
+- priorityMatrix:
+  * EQ-focused: "Naturalness / Engagement / Aesthetics > Utility > Audio Quality"
+  * IQ-focused: "Utility > Naturalness / Engagement / Aesthetics > Audio Quality"
+  * Endpointing / CD: "Conversational Dynamics > Naturalness / Engagement / Aesthetics > Audio Quality"
+  * Hybrid / Structural: "Balanced by dominant prompt intent"
+- Required language & regional dialect, min/max duration (seconds), minUserTurns (1 Turn = 1 message from 1 party; "3+ turns" = at least 3 user turns), and skillsTested.
+
+3. ADAPTIVE TURN-BY-TURN RULES & ELEVENLABS v4 SPOKEN SCRIPT
+- Generate ONLY ONE user turn at a time, adapting directly to the model's actual previous response. Never repeat questions or use rigid pre-written scripts.
+- Write plain, natural speakable dialogue (no emojis, markdown, quotation marks, or stage directions). Write numbers as spoken words.
+- Preserve the exact requested dialect (e.g., Egyptian Arabic, Standard Arabic, Saudi/Hejazi, English) without formalizing.
+- Respect the specified listener grammatical gender (male/female/neutral).
+- When ElevenLabs v4/v3 is active, use expressive tags like [laughs], [sighs], [hesitates], [softly] SPARINGLY only when contextually natural.
+- For Model B Turn 1, create a genuinely different opening wording and conversational structure while preserving the exact same scenario objective, context, difficulty, and dialect.
+- If the spoken script is NOT Arabic, provide a complete natural Egyptian Arabic translation; if it IS Arabic, leave translation empty "".
+- Always output STRICT JSON only, with no markdown fences.`;
+
+    // Application Runtime State
+    const appState = {
+      imageBase64: null,
+      imageMime: 'image/jpeg',
+      listenerGender: 'm',
+      activeModel: 'A',
+      taskProfile: null,
+      transcripts: { A: [], B: [] },
+      userTurns: { A: 0, B: 0 },
+      timers: { A: 0, B: 0 },
+      timerInterval: null,
+      openA: '',
+      issues: [],
+      ratings: {
+        nea: 'Response A',
+        utility: 'Response A',
+        cd: 'Tie',
+        aq: 'Both Good',
+        tsA: 'Pass',
+        tsB: 'Pass',
+        overall: 'Response A'
+      },
+      recognition: null,
+      isListening: false,
+      silenceTimer: null,
+      isBusy: false
+    };
+
+    // -------------------- UTILITIES --------------------
+    function showToast(msg, isError = false) {
+      const t = document.getElementById('toast');
+      const dot = document.getElementById('toast-dot');
+      document.getElementById('toast-text').textContent = msg;
+      dot.className = isError
+        ? 'w-2 h-2 rounded-full bg-rose-400 flex-shrink-0'
+        : 'w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0';
+      t.classList.remove('hidden');
+      t.classList.add('flex');
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => {
+        t.classList.add('hidden');
+        t.classList.remove('flex');
+      }, 3600);
+    }
+
+    function formatTime(sec) {
+      const m = String(Math.floor(sec / 60)).padStart(2, '0');
+      const s = String(sec % 60).padStart(2, '0');
+      return `${m}:${s}`;
+    }
+
+    function escapeHtml(str) {
+      return String(str || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    }
+
+    function isArabicText(str) {
+      return /[\u0600-\u06FF]/.test(str || '');
+    }
+
+    function switchView(view) {
+      const tView = document.getElementById('view-task');
+      const sView = document.getElementById('view-settings');
+      const tBtn = document.getElementById('nav-task');
+      const sBtn = document.getElementById('nav-settings');
+
+      if (view === 'task') {
+        tView.classList.remove('hidden');
+        sView.classList.add('hidden');
+        tBtn.className = 'px-3.5 sm:px-4 py-1.5 rounded-lg text-xs font-bold bg-white text-zinc-950 transition';
+        sBtn.className = 'px-3.5 sm:px-4 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 transition';
+      } else {
+        tView.classList.add('hidden');
+        sView.classList.remove('hidden');
+        sBtn.className = 'px-3.5 sm:px-4 py-1.5 rounded-lg text-xs font-bold bg-white text-zinc-950 transition';
+        tBtn.className = 'px-3.5 sm:px-4 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 transition';
+        populateAudioOutputDevices();
+      }
+    }
+
+    function switchRightTab(tab) {
+      const iPanel = document.getElementById('rpanel-issues');
+      const rPanel = document.getElementById('rpanel-rating');
+      const iBtn = document.getElementById('rtab-issues');
+      const rBtn = document.getElementById('rtab-rating');
+
+      if (tab === 'issues') {
+        iPanel.classList.remove('hidden');
+        rPanel.classList.add('hidden');
+        iBtn.className = 'py-2 rounded-lg text-xs font-semibold bg-zinc-800 text-white transition';
+        rBtn.className = 'py-2 rounded-lg text-xs font-medium text-zinc-400 hover:text-white transition';
+      } else {
+        iPanel.classList.add('hidden');
+        rPanel.classList.remove('hidden');
+        rBtn.className = 'py-2 rounded-lg text-xs font-semibold bg-zinc-800 text-white transition';
+        iBtn.className = 'py-2 rounded-lg text-xs font-medium text-zinc-400 hover:text-white transition';
+      }
+    }
+
+    function setListenerGender(g) {
+      appState.listenerGender = g;
+      ['m', 'f', 'auto'].forEach(k => {
+        const b = document.getElementById(`gen-${k}`);
+        b.className = (k === g)
+          ? 'py-1.5 rounded-lg text-xs font-semibold bg-zinc-800 text-white transition'
+          : 'py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white transition';
+      });
+    }
+
+    function toggleSecret(id, btn) {
+      const el = document.getElementById(id);
+      if (el.type === 'password') { el.type = 'text'; btn.textContent = 'Hide'; }
+      else { el.type = 'password'; btn.textContent = 'Show'; }
+    }
+
+    // -------------------- SETTINGS PERSISTENCE --------------------
+    function getSettings() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) return JSON.parse(raw);
+      } catch (_) {}
+      return {
+        provider: 'gemini',
+        aiKey: '',
+        aiModel: 'gemini-4-hydrogen',
+        autoFallback: true,
+        elevenKey: '',
+        voiceId: '',
+        elevenModel: 'eleven_v4',
+        outputDevice: 'default',
+        stability: 0.50,
+        similarity: 0.85,
+        speed: 1.00,
+        masterPrompt: DEFAULT_MASTER_PROMPT
+      };
+    }
+
+    function loadSettingsIntoUI() {
+      const cfg = getSettings();
+      document.getElementById('cfg-provider').value = cfg.provider || 'gemini';
+      document.getElementById('cfg-ai-key').value = cfg.aiKey || '';
+      document.getElementById('cfg-ai-model').value = cfg.aiModel || 'gemini-4-hydrogen';
+      const sel = document.getElementById('cfg-ai-model-select');
+      if ([...sel.options].some(o => o.value === cfg.aiModel)) sel.value = cfg.aiModel;
+      document.getElementById('cfg-auto-fallback').checked = cfg.autoFallback !== false;
+
+      document.getElementById('cfg-11-key').value = cfg.elevenKey || '';
+      document.getElementById('cfg-voice-id').value = cfg.voiceId || '';
+      document.getElementById('cfg-11-model').value = cfg.elevenModel || 'eleven_v4';
+      document.getElementById('cfg-stability').value = Math.round((cfg.stability ?? 0.50) * 100);
+      document.getElementById('lbl-stab').textContent = (cfg.stability ?? 0.50).toFixed(2);
+      document.getElementById('cfg-similarity').value = Math.round((cfg.similarity ?? 0.85) * 100);
+      document.getElementById('lbl-sim').textContent = (cfg.similarity ?? 0.85).toFixed(2);
+      document.getElementById('cfg-speed').value = Math.round((cfg.speed ?? 1.00) * 100);
+      document.getElementById('lbl-speed').textContent = (cfg.speed ?? 1.00).toFixed(2) + 'x';
+      document.getElementById('cfg-master-prompt').value = cfg.masterPrompt || DEFAULT_MASTER_PROMPT;
+
+      document.getElementById('top-model-badge').textContent = cfg.aiModel || 'gemini-4-hydrogen';
+      document.getElementById('top-11-badge').textContent = cfg.elevenModel || 'eleven_v4';
+      document.getElementById('btn-speak-label').textContent = `نطق (${cfg.elevenModel || 'eleven_v4'})`;
+    }
+
+    function saveSettings(returnToTask = false) {
+      const cfg = {
+        provider: document.getElementById('cfg-provider').value,
+        aiKey: document.getElementById('cfg-ai-key').value.trim(),
+        aiModel: document.getElementById('cfg-ai-model').value.trim() || 'gemini-4-hydrogen',
+        autoFallback: document.getElementById('cfg-auto-fallback').checked,
+        elevenKey: document.getElementById('cfg-11-key').value.trim(),
+        voiceId: document.getElementById('cfg-voice-id').value.trim(),
+        elevenModel: document.getElementById('cfg-11-model').value || 'eleven_v4',
+        outputDevice: document.getElementById('cfg-output-device').value || 'default',
+        stability: Number(document.getElementById('cfg-stability').value) / 100,
+        similarity: Number(document.getElementById('cfg-similarity').value) / 100,
+        speed: Number(document.getElementById('cfg-speed').value) / 100,
+        masterPrompt: document.getElementById('cfg-master-prompt').value.trim() || DEFAULT_MASTER_PROMPT
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+      loadSettingsIntoUI();
+      showToast('تم حفظ الإعدادات بنجاح');
+      if (returnToTask) switchView('task');
+    }
+
+    function resetMasterPrompt() {
+      document.getElementById('cfg-master-prompt').value = DEFAULT_MASTER_PROMPT;
+      showToast('تمت استعادة البرومبت الافتراضي');
+    }
+
+    async function populateAudioOutputDevices() {
+      if (!navigator.mediaDevices?.enumerateDevices) return;
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const outputs = devices.filter(d => d.kind === 'audiooutput');
+        const sel = document.getElementById('cfg-output-device');
+        const saved = getSettings().outputDevice || 'default';
+        sel.innerHTML = '<option value="default">Default Speakers / Cable</option>';
+        outputs.forEach(d => {
+          if (d.deviceId === 'default') return;
+          const opt = document.createElement('option');
+          opt.value = d.deviceId;
+          opt.textContent = d.label || `Audio Output (${d.deviceId.slice(0, 6)})`;
+          sel.appendChild(opt);
+        });
+        sel.value = saved;
+      } catch (_) {}
+    }
+
+    // -------------------- TIMER & DURATION GATE --------------------
+    function startStopwatch() {
+      clearInterval(appState.timerInterval);
+      appState.timerInterval = setInterval(() => {
+        const m = appState.activeModel;
+        appState.timers[m]++;
+        updateTimerUI();
+      }, 1000);
+    }
+
+    function updateTimerUI() {
+      const m = appState.activeModel;
+      const sec = appState.timers[m];
+      document.getElementById('timer-text').textContent = formatTime(sec);
+
+      const minSec = appState.taskProfile?.minDurationSec || 60;
+      const maxSec = appState.taskProfile?.maxDurationSec || 240;
+      const minTurns = appState.taskProfile?.minUserTurns || 3;
+      const curTurns = appState.userTurns[m];
+
+      document.getElementById('turn-counter-text').textContent = `${curTurns} / ${minTurns}`;
+
+      const dot = document.getElementById('timer-gate-dot');
+      if (sec < minSec) {
+        dot.className = 'w-2 h-2 rounded-full bg-amber-400';
+      } else if (sec <= maxSec) {
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-400';
+      } else {
+        dot.className = 'w-2 h-2 rounded-full bg-rose-500 animate-ping';
+      }
+
+      if (appState.taskProfile && sec >= minSec && curTurns >= minTurns) {
+        showTransitionBanner();
+      }
+    }
+
+    function showTransitionBanner() {
+      const banner = document.getElementById('transition-banner');
+      const msg = document.getElementById('transition-banner-msg');
+      const btn = document.getElementById('btn-transition-action');
+      banner.classList.remove('hidden');
+      if (appState.activeModel === 'A') {
+        msg.textContent = 'تم استيفاء مدة وأهداف Model A — نقدر ننتقل دلوقتي إلى Model B';
+        btn.textContent = 'A خلصت. ابدأ B ➔';
+      } else {
+        msg.textContent = 'تم استيفاء مدة وأهداف Model B — جاهز للتقييم النهائي والـ Rationale';
+        btn.textContent = 'عرض التقييم والـ Rationale ➔';
+      }
+    }
+
+    // -------------------- IMAGE COMPRESSION & CAPTURE --------------------
+    function compressImageFile(file) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+          const maxDim = 1400;
+          const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          URL.revokeObjectURL(url);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.84);
+          resolve({ dataUrl, base64: dataUrl.split(',')[1], mime: 'image/jpeg' });
+        };
+        img.onerror = (err) => { URL.revokeObjectURL(url); reject(err); };
+        img.src = url;
+      });
+    }
+
+    async function handleImageFile(file) {
+      if (!file) return;
+      const cfg = getSettings();
+      if (!cfg.aiKey) {
+        showToast('أدخل Gemini API Key في الإعدادات أولاً', true);
+        switchView('settings');
+        return;
+      }
+
+      // Unlock mobile audio playback on user gesture
+      const au = document.getElementById('eleven-audio-player');
+      au.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+      au.play().catch(() => {});
+
+      try {
+        const compressed = await compressImageFile(file);
+        appState.imageBase64 = compressed.base64;
+        appState.imageMime = compressed.mime;
+
+        document.getElementById('screenshot-preview-img').src = compressed.dataUrl;
+        document.getElementById('screenshot-preview-wrap').classList.remove('hidden');
+
+        await analyzeTaskAndStartModelA();
+      } catch (e) {
+        showToast(`خطأ في معالجة الصورة: ${e.message}`, true);
+      }
+    }
+
+    // Global Ctrl+V Paste Support
+    window.addEventListener('paste', (e) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            e.preventDefault();
+            handleImageFile(file);
+            break;
+          }
+        }
+      }
+    });
+
+    // -------------------- GEMINI ENGINE (MATCHING WORKING INDEX-V8) --------------------
+    function getThinkingConfig(mdl, isEval = false) {
+      if (/gemini-4/i.test(mdl)) return { thinkingLevel: isEval ? 'medium' : 'low' };
+      if (/gemini-3\.8|gemini-3\.6|gemini-3\.1-pro|gemini-3-pro/i.test(mdl)) return { thinkingLevel: isEval ? 'medium' : 'low' };
+      if (/gemini-3\.5-flash-lite|gemini-3\.1-flash-lite|gemini-3-flash/i.test(mdl)) return { thinkingLevel: isEval ? 'low' : 'minimal' };
+      if (/2\.5-flash/i.test(mdl)) return { thinkingBudget: 0 };
+      return null;
+    }
+
+    function genderInstruction() {
+      if (appState.listenerGender === 'f') return 'Listener gender: FEMALE. Address the AI voice using feminine grammatical forms (e.g., إنتِ).';
+      if (appState.listenerGender === 'm') return 'Listener gender: MALE. Address the AI voice using masculine grammatical forms (e.g., إنت).';
+      return 'Listener gender: NEUTRAL.';
+    }
+
+    async function callLLM(promptText, includeImage = false, isEval = false) {
+      const cfg = getSettings();
+      const primaryModel = cfg.aiModel || 'gemini-4-hydrogen';
+      const systemPrompt = cfg.masterPrompt || DEFAULT_MASTER_PROMPT;
+      const enableFallback = cfg.autoFallback !== false;
+
+      if (cfg.provider === 'openai') {
+        const userContent = [{ type: 'text', text: promptText }];
+        if (includeImage && appState.imageBase64) {
+          userContent.push({ type: 'image_url', image_url: { url: `data:${appState.imageMime};base64,${appState.imageBase64}` } });
+        }
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.aiKey}` },
+          body: JSON.stringify({
+            model: primaryModel,
+            response_format: { type: 'json_object' },
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userContent }
+            ]
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
+        return { data: JSON.parse(data.choices[0].message.content), usedModel: primaryModel };
+      }
+
+      // Google Gemini with x-goog-api-key header + thinkingConfig + Auto-Fallback
+      const fallbackPool = [
+        primaryModel,
+        'gemini-4-hydrogen',
+        'gemini-3.8-flash',
+        'gemini-3.5-flash-lite',
+        'gemini-2.5-flash',
+        'gemini-2.0-flash'
+      ];
+      const modelsToTry = enableFallback ? [...new Set(fallbackPool)] : [primaryModel];
+
+      const parts = [{ text: promptText }];
+      if (includeImage && appState.imageBase64) {
+        parts.push({ inlineData: { mimeType: appState.imageMime, data: appState.imageBase64 } });
+      }
+
+      let lastError = null;
+      let useThinking = true;
+
+      for (let i = 0; i < modelsToTry.length; i++) {
+        const currentModel = modelsToTry[i];
+        if (i > 0) {
+          const st = document.getElementById('analyzing-status-text');
+          if (st) st.textContent = `جاري التحويل تلقائياً إلى ${currentModel}...`;
+          showToast(`تم التحويل تلقائياً إلى ${currentModel}`);
+        }
+
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent`;
+          const maxTok = isEval ? 8192 : (/gemini-4|gemini-3\.8/i.test(currentModel) ? 4096 : 1600);
+          const genConfig = { responseMimeType: 'application/json', maxOutputTokens: maxTok };
+          if (useThinking) {
+            const tc = getThinkingConfig(currentModel, isEval);
+            if (tc) genConfig.thinkingConfig = tc;
+          }
+
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'x-goog-api-key': cfg.aiKey
+            },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: systemPrompt }] },
+              contents: [{ role: 'user', parts }],
+              generationConfig: genConfig
+            })
+          });
+
+          if (res.status === 400 && useThinking) {
+            useThinking = false;
+            i--;
+            continue;
+          }
+
+          const rawBody = await res.text();
+          if (!res.ok) {
+            let msg = `HTTP ${res.status}`;
+            try { msg = JSON.parse(rawBody).error?.message || msg; } catch (_) {}
+            const isRetryable = [404, 429, 500, 503].includes(res.status) || /high demand|overloaded|unavailable|quota|not found/i.test(msg);
+            lastError = new Error(msg);
+            if (isRetryable && i < modelsToTry.length - 1) {
+              await new Promise(r => setTimeout(r, 800));
+              continue;
+            }
+            throw lastError;
+          }
+
+          const json = JSON.parse(rawBody);
+          const textParts = (json.candidates?.[0]?.content?.parts || []).filter(p => !p.thought && p.text);
+          const fullText = textParts.map(p => p.text).join('').trim();
+          const sIdx = fullText.indexOf('{');
+          const eIdx = fullText.lastIndexOf('}');
+          const cleanJson = (sIdx >= 0 && eIdx > sIdx) ? fullText.slice(sIdx, eIdx + 1) : fullText;
+
+          document.getElementById('top-model-badge').textContent = currentModel;
+          return { data: JSON.parse(cleanJson), usedModel: currentModel };
+        } catch (err) {
+          lastError = err;
+          if (i === modelsToTry.length - 1) throw lastError;
+        }
+      }
+      throw lastError;
+    }
+
+    // -------------------- STEP 1: ANALYZE SCREENSHOT & START MODEL A --------------------
+    async function analyzeTaskAndStartModelA() {
+      stopAllAudioAndMic();
+      appState.isBusy = true;
+      document.getElementById('analyzing-overlay').classList.remove('hidden');
+      document.getElementById('analyzing-status-text').textContent = 'جاري تحليل التاسك وتوليد Turn 1...';
+      setLoopStatus('جاري تحليل الصورة...');
+
+      try {
+        const prompt = `Analyze the attached Live S2S task screenshot carefully.
+${genderInstruction()}
+Return STRICT JSON with these exact keys:
+{
+  "scenarioBucket": "EQ-focused | IQ-focused | Hybrid / Structural | Endpointing / CD",
+  "scenarioTitle": "short scenario title",
+  "priorityMatrix": "official priority order based on bucket",
+  "language": "required language e.g. Arabic or English",
+  "dialect": "exact regional dialect e.g. Egyptian Arabic",
+  "speechLangCode": "BCP-47 code for Web Speech API e.g. ar-EG, ar-SA, en-US",
+  "minDurationSec": 60,
+  "maxDurationSec": 240,
+  "minUserTurns": 3,
+  "objectiveSummary": "concise summary of WHAT TO DO and SKILLS TESTED",
+  "modelATurn1Script": "natural ElevenLabs-ready spoken opening for Model A Turn 1 in the exact required language/dialect",
+  "modelATurn1ArabicTranslation": "Egyptian Arabic translation ONLY if script is non-Arabic, else empty string"
+}`;
+
+        const { data } = await callLLM(prompt, true, false);
+        appState.taskProfile = data;
+        appState.activeModel = 'A';
+        appState.transcripts = { A: [], B: [] };
+        appState.userTurns = { A: 1, B: 0 };
+        appState.timers = { A: 0, B: 0 };
+        appState.openA = data.modelATurn1Script || '';
+
+        // Populate Task Profile UI
+        document.getElementById('meta-bucket').textContent = data.scenarioBucket || 'Task';
+        document.getElementById('meta-title').textContent = data.scenarioTitle || '—';
+        document.getElementById('meta-priority').textContent = data.priorityMatrix || '—';
+        document.getElementById('meta-dialect').textContent = `${data.language || ''} (${data.dialect || ''})`;
+        document.getElementById('meta-duration').textContent = `${Math.round((data.minDurationSec || 60) / 60)}m – ${Math.round((data.maxDurationSec || 240) / 60)}m`;
+        document.getElementById('meta-minturns').textContent = `${data.minUserTurns || 3}+ User Turns`;
+        document.getElementById('meta-objective').textContent = data.objectiveSummary || '';
+        document.getElementById('meta-objective-wrap').classList.remove('hidden');
+
+        document.getElementById('transition-banner').classList.add('hidden');
+        updateModelTabsUI();
+        setCurrentScriptUI(data.modelATurn1Script, data.modelATurn1ArabicTranslation, 'Model A — Turn 1');
+        renderTranscript();
+        startStopwatch();
+        updateTimerUI();
+
+        showToast('تم تحليل التاسك وجاري النطق تلقائياً');
+
+        if (document.getElementById('auto-loop-toggle').checked) {
+          await speakCurrentScript();
+        }
+      } catch (e) {
+        showToast(`خطأ في التحليل: ${e.message}`, true);
+        setLoopStatus('حدث خطأ');
+      } finally {
+        appState.isBusy = false;
+        document.getElementById('analyzing-overlay').classList.add('hidden');
+      }
+    }
+
+    // -------------------- STEP 2: ELEVENLABS SPEAK ENGINE --------------------
+    function cleanScriptForTTS(text, modelId) {
+      let s = String(text || '')
+        .replace(/[*_#`~>|]/g, '')
+        .replace(/[“”«»„"]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (!/v3|v4/i.test(modelId || '')) {
+        s = s.replace(/\[[^\]]{1,24}\]/g, '').replace(/\s+/g, ' ').trim();
+      }
+      return s;
+    }
+
+    async function speakCurrentScript() {
+      const cfg = getSettings();
+      const rawText = document.getElementById('current-script-box').value.trim();
+      if (!rawText) return showToast('لا يوجد نص للنطق', true);
+      if (!cfg.elevenKey || !cfg.voiceId) {
+        showToast('أدخل ElevenLabs API Key و Voice ID في الإعدادات أولاً', true);
+        switchView('settings');
+        return;
+      }
+
+      stopMicListening();
+      const modelId = cfg.elevenModel || 'eleven_v4';
+      const textToSpeak = cleanScriptForTTS(rawText, modelId);
+
+      setLoopStatus(`جاري التوليد (${modelId})...`);
+      const eq = document.getElementById('equalizer-bars');
+      const btnLabel = document.getElementById('btn-speak-label');
+      btnLabel.textContent = 'جاري التوليد...';
+
+      try {
+        const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(cfg.voiceId)}`, {
+          method: 'POST',
+          headers: {
+            'xi-api-key': cfg.elevenKey,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            text: textToSpeak,
+            model_id: modelId,
+            voice_settings: {
+              stability: cfg.stability ?? 0.50,
+              similarity_boost: cfg.similarity ?? 0.85,
+              style: 0.30,
+              use_speaker_boost: true
+            }
+          })
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`ElevenLabs (${res.status}): ${errText.slice(0, 120)}`);
+        }
+
+        const blob = await res.blob();
+        const audioUrl = URL.createObjectURL(blob);
+        const audio = document.getElementById('eleven-audio-player');
+        audio.src = audioUrl;
+        audio.playbackRate = cfg.speed || 1.0;
+
+        if (cfg.outputDevice && cfg.outputDevice !== 'default' && typeof audio.setSinkId === 'function') {
+          try { await audio.setSinkId(cfg.outputDevice); } catch (_) {}
+        }
+
+        eq.classList.add('speaking');
+        btnLabel.textContent = 'جاري النطق...';
+        setLoopStatus(`يتكلم الآن بصوتك (${modelId})`);
+
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+          eq.classList.remove('speaking');
+          btnLabel.textContent = `نطق (${modelId})`;
+          if (document.getElementById('auto-loop-toggle').checked) {
+            startMicListening();
+          } else {
+            setLoopStatus('انتهى النطق — بانتظار رد الموديل');
+          }
+        };
+
+        audio.onerror = () => {
+          eq.classList.remove('speaking');
+          btnLabel.textContent = `نطق (${modelId})`;
+          setLoopStatus('خطأ في تشغيل الصوت');
+        };
+
+        await audio.play();
+      } catch (e) {
+        eq.classList.remove('speaking');
+        btnLabel.textContent = `نطق (${modelId})`;
+        setLoopStatus('فشل النطق');
+        showToast(e.message, true);
+      }
+    }
+
+    function stopAllAudioAndMic() {
+      const audio = document.getElementById('eleven-audio-player');
+      audio.pause();
+      audio.currentTime = 0;
+      document.getElementById('equalizer-bars').classList.remove('speaking');
+      const cfg = getSettings();
+      document.getElementById('btn-speak-label').textContent = `نطق (${cfg.elevenModel || 'eleven_v4'})`;
+      stopMicListening();
+      setLoopStatus('متوقف');
+    }
+
+    // -------------------- STEP 3: AUTO-LISTEN (WEB SPEECH API + SILENCE AUTO-SUBMIT) --------------------
+    function startMicListening() {
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRec) {
+        setLoopStatus('المتصفح لا يدعم الاستماع التلقائي — اكتب رد الموديل');
+        return;
+      }
+
+      stopMicListening();
+      const rec = new SpeechRec();
+      rec.lang = appState.taskProfile?.speechLangCode || 'ar-EG';
+      rec.continuous = true;
+      rec.interimResults = true;
+
+      let finalTranscript = '';
+      const inputBox = document.getElementById('model-reply-input');
+      inputBox.value = '';
+
+      rec.onstart = () => {
+        appState.isListening = true;
+        document.getElementById('mic-dot').className = 'w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping';
+        document.getElementById('mic-btn-label').textContent = 'إيقاف الاستماع';
+        setLoopStatus(`يستمع لرد Model ${appState.activeModel}...`);
+      };
+
+      rec.onresult = (event) => {
+        let interim = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const piece = event.results[i][0].transcript;
+          if (event.results[i].isFinal) finalTranscript += piece + ' ';
+          else interim += piece;
+        }
+        inputBox.value = (finalTranscript + interim).trim();
+
+        // Reset 2.2s silence timer whenever speech is detected
+        clearTimeout(appState.silenceTimer);
+        if (inputBox.value.length > 1 && document.getElementById('auto-loop-toggle').checked) {
+          appState.silenceTimer = setTimeout(() => {
+            if (appState.isListening && inputBox.value.trim()) {
+              stopMicListening();
+              submitModelReply();
+            }
+          }, 2200);
+        }
+      };
+
+      rec.onerror = (e) => {
+        if (e.error !== 'no-speech' && e.error !== 'aborted') {
+          showToast(`خطأ في المايك: ${e.error}`, true);
+        }
+      };
+
+      rec.onend = () => {
+        appState.isListening = false;
+        document.getElementById('mic-dot').className = 'w-1.5 h-1.5 rounded-full bg-zinc-500';
+        document.getElementById('mic-btn-label').textContent = 'تشغيل المايك للاستماع';
+      };
+
+      appState.recognition = rec;
+      try { rec.start(); } catch (_) {}
+    }
+
+    function stopMicListening() {
+      clearTimeout(appState.silenceTimer);
+      appState.isListening = false;
+      if (appState.recognition) {
+        try { appState.recognition.stop(); } catch (_) {}
+        appState.recognition = null;
+      }
+      document.getElementById('mic-dot').className = 'w-1.5 h-1.5 rounded-full bg-zinc-500';
+      document.getElementById('mic-btn-label').textContent = 'تشغيل المايك للاستماع';
+    }
+
+    function toggleManualMicListening() {
+      if (appState.isListening) stopMicListening();
+      else startMicListening();
+    }
+
+    // -------------------- STEP 4: ADAPTIVE NEXT TURN ENGINE --------------------
+    async function submitModelReply() {
+      if (appState.isBusy) return;
+      const inputBox = document.getElementById('model-reply-input');
+      const replyText = inputBox.value.trim();
+      if (!replyText) return;
+
+      stopMicListening();
+      const m = appState.activeModel;
+      const userScript = document.getElementById('current-script-box').value.trim();
+      const timestamp = formatTime(appState.timers[m]);
+      const turnNum = appState.userTurns[m] || 1;
+
+      appState.transcripts[m].push({
+        turn: turnNum,
+        time: timestamp,
+        user: userScript,
+        model: replyText
+      });
+
+      inputBox.value = '';
+      renderTranscript();
+
+      appState.isBusy = true;
+      setLoopStatus(`جاري توليد الرد التكيفي لـ Model ${m}...`);
+
+      try {
+        const minSec = appState.taskProfile?.minDurationSec || 60;
+        const maxSec = appState.taskProfile?.maxDurationSec || 240;
+        const minTurns = appState.taskProfile?.minUserTurns || 3;
+        const curSec = appState.timers[m];
+
+        const historyStr = appState.transcripts[m]
+          .map(t => `Turn ${t.turn} [${t.time}]\nUser: ${t.user}\nModel ${m}: ${t.model}`)
+          .join('\n\n');
+
+        const prompt = `We are currently testing Model ${m}.
+Task Profile: ${JSON.stringify(appState.taskProfile || {})}
+${genderInstruction()}
+Elapsed seconds: ${curSec}s (Min required: ${minSec}s, Max: ${maxSec}s).
+Completed user turns: ${appState.transcripts[m].length} (Min required: ${minTurns}).
+
+Conversation so far with Model ${m}:
+${historyStr}
+
+Generate the next natural, adaptive user spoken turn reacting directly to Model ${m}'s last reply while testing the task objective.
+Set "isCompletionGateMet": true ONLY if elapsed >= minDurationSec AND completed turns >= minUserTurns AND the task objective has been thoroughly tested (or if approaching maxDurationSec).
+Return STRICT JSON:
+{
+  "nextUserScript": "...",
+  "arabicTranslation": "Egyptian Arabic translation ONLY if script is non-Arabic, else empty string",
+  "isCompletionGateMet": false
+}`;
+
+        const { data } = await callLLM(prompt, false, false);
+        appState.userTurns[m]++;
+        const nextTurn = appState.userTurns[m];
+
+        setCurrentScriptUI(data.nextUserScript, data.arabicTranslation, `Model ${m} — Turn ${nextTurn}`);
+        updateTimerUI();
+
+        const gateMet = data.isCompletionGateMet && curSec >= minSec && appState.transcripts[m].length >= minTurns;
+        if (gateMet || curSec >= maxSec - 15) {
+          showTransitionBanner();
+        }
+
+        if (document.getElementById('auto-loop-toggle').checked) {
+          await speakCurrentScript();
+        } else {
+          setLoopStatus(`جاهز لـ Turn ${nextTurn}`);
+        }
+      } catch (e) {
+        showToast(`خطأ في توليد الدور التالي: ${e.message}`, true);
+        setLoopStatus('حدث خطأ');
+      } finally {
+        appState.isBusy = false;
+      }
+    }
+
+    // -------------------- STEP 5: TRANSITION MODEL A -> MODEL B -> EVALUATION --------------------
+    async function handleModelTransition() {
+      stopAllAudioAndMic();
+      if (appState.activeModel === 'B') {
+        clearInterval(appState.timerInterval);
+        switchRightTab('rating');
+        await generateOfficialRationale();
+        showToast('تم إنهاء Model B وتجهيز التقييم والـ Rationale');
+        return;
+      }
+
+      // Transition A -> B with genuinely fresh opening
+      appState.activeModel = 'B';
+      appState.userTurns.B = 1;
+      appState.timers.B = 0;
+      document.getElementById('transition-banner').classList.add('hidden');
+      updateModelTabsUI();
+      renderTranscript();
+      startStopwatch();
+      updateTimerUI();
+
+      if (!appState.taskProfile) {
+        setLoopStatus('Model B جاهز');
+        return;
+      }
+
+      appState.isBusy = true;
+      setLoopStatus('جاري توليد بداية جديدة ومختلفة لـ Model B...');
+
+      try {
+        const prompt = `Model A is complete. Now generate Model B — Turn 1.
+Task Profile: ${JSON.stringify(appState.taskProfile)}
+${genderInstruction()}
+CRITICAL RULE: Model B Turn 1 MUST test the EXACT same task objective, difficulty, language, and dialect, but use a GENUINELY DIFFERENT opening structure and wording from Model A's opening: "${appState.openA}". Do NOT just swap synonyms.
+Return STRICT JSON:
+{
+  "modelBTurn1Script": "...",
+  "arabicTranslation": "Egyptian Arabic translation ONLY if script is non-Arabic, else empty string"
+}`;
+        const { data } = await callLLM(prompt, false, false);
+        setCurrentScriptUI(data.modelBTurn1Script, data.arabicTranslation, 'Model B — Turn 1 (بداية جديدة)');
+        showToast('A خلصت — بدأنا Model B ببداية جديدة');
+
+        if (document.getElementById('auto-loop-toggle').checked) {
+          await speakCurrentScript();
+        }
+      } catch (e) {
+        showToast(`خطأ في بدء Model B: ${e.message}`, true);
+      } finally {
+        appState.isBusy = false;
+      }
+    }
+
+    function switchActiveModel(m) {
+      if (m === appState.activeModel) return;
+      if (m === 'B' && appState.userTurns.B === 0 && appState.taskProfile) {
+        handleModelTransition();
+        return;
+      }
+      stopAllAudioAndMic();
+      appState.activeModel = m;
+      updateModelTabsUI();
+      renderTranscript();
+      updateTimerUI();
+    }
+
+    function updateModelTabsUI() {
+      const isA = appState.activeModel === 'A';
+      document.getElementById('tab-model-A').className = isA
+        ? 'px-3.5 py-1.5 rounded-lg text-xs font-bold bg-zinc-800 text-white flex items-center gap-1.5 transition'
+        : 'px-3.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 flex items-center gap-1.5 transition';
+      document.getElementById('tab-model-B').className = !isA
+        ? 'px-3.5 py-1.5 rounded-lg text-xs font-bold bg-zinc-800 text-white flex items-center gap-1.5 transition'
+        : 'px-3.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 flex items-center gap-1.5 transition';
+      document.getElementById('dot-model-A').className = isA ? 'w-1.5 h-1.5 rounded-full bg-emerald-400' : 'w-1.5 h-1.5 rounded-full bg-zinc-600';
+      document.getElementById('dot-model-B').className = !isA ? 'w-1.5 h-1.5 rounded-full bg-emerald-400' : 'w-1.5 h-1.5 rounded-full bg-zinc-600';
+
+      document.getElementById('log-active-model').textContent = `Model ${appState.activeModel}`;
+      document.getElementById('issues-active-model').textContent = `Model ${appState.activeModel}`;
+      document.getElementById('btn-quick-switch').textContent = isA ? 'انتقل لـ Model B' : 'إنهاء والتقييم';
+    }
+
+    function setCurrentScriptUI(script, arTrans, label) {
+      const box = document.getElementById('current-script-box');
+      box.value = script || '';
+      box.dir = isArabicText(script) ? 'rtl' : 'ltr';
+      document.getElementById('active-turn-label').textContent = label;
+
+      const wrap = document.getElementById('translation-wrap');
+      if (arTrans && !isArabicText(script)) {
+        document.getElementById('translation-text').textContent = arTrans;
+        wrap.classList.remove('hidden');
+      } else {
+        wrap.classList.add('hidden');
+      }
+    }
+
+    function setLoopStatus(text) {
+      document.getElementById('loop-status-pill').textContent = text;
+    }
+
+    function renderTranscript() {
+      const feed = document.getElementById('transcript-feed');
+      const items = appState.transcripts[appState.activeModel];
+      if (!items.length) {
+        feed.innerHTML = `<div class="text-center py-8 text-xs text-zinc-500">لا توجد ردود مسجلة لـ Model ${appState.activeModel} بعد.</div>`;
+        return;
+      }
+      feed.innerHTML = items.map(it => `
+        <div class="space-y-2">
+          <div class="flex flex-col items-start">
+            <span class="text-[10px] font-mono text-zinc-500 mb-1">User • T${it.turn} [${it.time}]</span>
+            <div class="max-w-[88%] rounded-2xl rounded-tr-sm bg-zinc-800/90 border border-zinc-700/70 px-3.5 py-2 text-sm text-zinc-100" dir="${isArabicText(it.user) ? 'rtl' : 'ltr'}">${escapeHtml(it.user)}</div>
+          </div>
+          <div class="flex flex-col items-end">
+            <span class="text-[10px] font-mono text-zinc-500 mb-1">Model ${appState.activeModel} • T${it.turn}</span>
+            <div class="max-w-[88%] rounded-2xl rounded-tl-sm bg-obsidian-950 border border-zinc-800 px-3.5 py-2 text-sm text-zinc-300 leading-relaxed" dir="${isArabicText(it.model) ? 'rtl' : 'ltr'}">${escapeHtml(it.model)}</div>
+          </div>
+        </div>
+      `).join('');
+      feed.scrollTop = feed.scrollHeight;
+    }
+
+    function copyCurrentScript() {
+      const txt = document.getElementById('current-script-box').value;
+      if (!txt) return;
+      navigator.clipboard.writeText(txt).then(() => showToast('تم نسخ النص'));
+    }
+
+    function resetCurrentTask() {
+      stopAllAudioAndMic();
+      clearInterval(appState.timerInterval);
+      appState.imageBase64 = null;
+      appState.taskProfile = null;
+      appState.activeModel = 'A';
+      appState.transcripts = { A: [], B: [] };
+      appState.userTurns = { A: 0, B: 0 };
+      appState.timers = { A: 0, B: 0 };
+      appState.issues = [];
+      document.getElementById('screenshot-preview-wrap').classList.add('hidden');
+      document.getElementById('meta-objective-wrap').classList.add('hidden');
+      document.getElementById('transition-banner').classList.add('hidden');
+      document.getElementById('current-script-box').value = '';
+      document.getElementById('translation-wrap').classList.add('hidden');
+      document.getElementById('rationale-output').value = '';
+      document.getElementById('meta-bucket').textContent = 'بانتظار الصورة';
+      document.getElementById('meta-title').textContent = '—';
+      document.getElementById('meta-priority').textContent = '—';
+      document.getElementById('meta-dialect').textContent = '—';
+      document.getElementById('meta-duration').textContent = '—';
+      document.getElementById('meta-minturns').textContent = '—';
+      updateModelTabsUI();
+      renderTranscript();
+      renderIssues();
+      updateTimerUI();
+      setLoopStatus('في الانتظار');
+      showToast('تم تصفير التاسك');
+    }
+
+    // -------------------- EVIDENCE & OFFICIAL RATIONALE --------------------
+    function logIssue(label, type) {
+      const m = appState.activeModel;
+      const turn = appState.userTurns[m] || 1;
+      const time = formatTime(appState.timers[m]);
+      appState.issues.unshift({ model: m, turn, time, label, type });
+      renderIssues();
+      showToast(`تم تسجيل "${label}" عند [${time}]`);
+    }
+
+    function logSelectedCluster() {
+      const sel = document.getElementById('official-cluster-select');
+      logIssue(sel.value, 'cluster');
+    }
+
+    function logCustomIssue() {
+      const inp = document.getElementById('custom-issue-input');
+      const val = inp.value.trim();
+      if (!val) return;
+      logIssue(val, 'custom');
+      inp.value = '';
+    }
+
+    function renderIssues() {
+      const list = document.getElementById('issues-log-list');
+      if (!appState.issues.length) {
+        list.innerHTML = '<div class="text-center py-6 text-[11px] text-zinc-500">لا توجد ملاحظات مسجلة بعد.</div>';
+        return;
+      }
+      list.innerHTML = appState.issues.map((it, idx) => `
+        <div class="bg-obsidian-950 border border-zinc-800 rounded-xl p-2.5 text-xs flex items-center justify-between gap-2">
+          <div>
+            <div class="font-mono text-[10px] text-zinc-400">Model ${it.model} • T${it.turn} [${it.time}]</div>
+            <div class="text-zinc-200 mt-0.5">${escapeHtml(it.label)}</div>
+          </div>
+          <button type="button" onclick="appState.issues.splice(${idx},1);renderIssues();" class="text-zinc-500 hover:text-white text-xs px-1.5">×</button>
+        </div>
+      `).join('');
+    }
+
+    function setRating(dim, value, btnEl) {
+      appState.ratings[dim] = value;
+      const parent = btnEl.parentElement;
+      parent.querySelectorAll('.rate-btn').forEach(b => {
+        b.className = 'rate-btn py-1.5 rounded-lg bg-zinc-900 text-zinc-400 border border-zinc-800 text-[11px]';
+      });
+      btnEl.className = 'rate-btn py-1.5 rounded-lg bg-white text-zinc-950 font-semibold text-[11px]';
+    }
+
+    async function generateOfficialRationale() {
+      const cfg = getSettings();
+      const out = document.getElementById('rationale-output');
+      const r = appState.ratings;
+
+      // If AI key is available and transcripts exist, use Gemini to write evidence-grounded English Rationale
+      if (cfg.aiKey && (appState.transcripts.A.length || appState.transcripts.B.length)) {
+        const btn = document.getElementById('btn-gen-rationale');
+        btn.textContent = 'Generating...';
+        try {
+          const prompt = `Write an official, copy-ready English Rationale for this Live S2S evaluation strictly following Section 4.3.2 template.
+CRITICAL RULES:
+- Must be 100% consistent with the user's selected ratings below.
+- Cite specific turns (T1, T2...) and timestamps [00:00] from the transcripts and logged issues.
+- NEVER write severity labels ("Minor", "Moderate", "Major", "Catastrophic") inside the rationale text.
+- Include ALL 7 sections: Overall Preference (with Decided mainly by & Reasoning), Utility, Audio Quality, Conversational Dynamics, Naturalness / Engagement / Aesthetics, Task Success (for Model A and Model B), and Flagged Error Cluster (if any logged).
+
+Task Profile: ${JSON.stringify(appState.taskProfile || {})}
+User Selected Ratings: ${JSON.stringify(r)}
+Model A Transcript: ${JSON.stringify(appState.transcripts.A)}
+Model B Transcript: ${JSON.stringify(appState.transcripts.B)}
+User Logged Issues/Audio Defects: ${JSON.stringify(appState.issues)}
+
+Return STRICT JSON: {"rationale": "complete plain text English rationale"}`;
+
+          const { data } = await callLLM(prompt, false, true);
+          out.value = (data.rationale || '').trim();
+          showToast('تم توليد الـ Rationale الرسمي بنجاح');
+          btn.textContent = 'Generate Official English Rationale';
+          return;
+        } catch (e) {
+          btn.textContent = 'Generate Official English Rationale';
+          showToast(`تم التوليد بالقالب المحلي (${e.message})`, true);
+        }
+      }
+
+      // Deterministic Official Template Fallback
+      const pref = r.overall === 'Response A' ? 'A preferred' : 'B preferred';
+      const util = r.utility.startsWith('Response') ? r.utility.replace('Response ', '') + ' preferred' : `Tie, ${r.utility.toLowerCase()}`;
+      const nea = r.nea.replace('Response ', '') + ' preferred';
+      const cd = r.cd.startsWith('Response') ? r.cd.replace('Response ', '') + ' preferred' : r.cd;
+      const aq = r.aq.startsWith('Response') ? r.aq.replace('Response ', '') + ' preferred' : `Tie, ${r.aq.toLowerCase()}`;
+      const priority = appState.taskProfile?.priorityMatrix || 'Scenario priority order';
+
+      const issueBlock = appState.issues.map(it =>
+        `\nFlagged Error Cluster: ${it.label} - Model ${it.model}\nEvidence: Turn ${it.turn}, [${it.time}]: observed ${it.label}.\nReasoning: Matches the official issue definition and impacted interaction quality.`
+      ).join('\n');
+
+      out.value = `Overall Preference: ${pref}
+Decided mainly by: ${priority}
+Reasoning: Based on the official scenario priority and observed turn-by-turn performance, ${r.overall} delivered the stronger overall experience.
+
+Utility: ${util}
+Evidence: Evaluated accuracy, completeness, and adherence to the task prompt across all turns.
+Reasoning: Directly supports the selected Utility rating.
+
+Audio Quality: ${aq}
+Evidence: Evaluated model output audio independently across all turns.
+Reasoning: Reflects observed vocal clarity and absence/presence of audio artifacts.
+
+Conversational Dynamics: ${cd}
+Evidence: Evaluated turn-taking timing, endpointing, and conversational flow.
+Reasoning: Reflects how naturally each model managed turn transitions.
+
+Naturalness / Engagement / Aesthetics: ${nea}
+Evidence: Evaluated vocal warmth, expressiveness, and dialect naturalness across turns.
+Reasoning: Supports the selected preference for natural human-like delivery.
+
+Task Success: Model A - ${r.tsA} | Model B - ${r.tsB}
+Evidence: Verified explicit and implicit scenario requirements across both conversations.
+Reasoning: Reflects whether each model fulfilled every layer of the user's request.${issueBlock}`.trim();
+    }
+
+    function copyRationale() {
+      const txt = document.getElementById('rationale-output').value;
+      if (!txt) return;
+      navigator.clipboard.writeText(txt).then(() => showToast('تم نسخ الـ Rationale'));
+    }
+
+    // -------------------- SETTINGS CONNECTION TESTERS --------------------
+    async function testGeminiConnection() {
+      const key = document.getElementById('cfg-ai-key').value.trim();
+      const model = document.getElementById('cfg-ai-model').value.trim() || 'gemini-4-hydrogen';
+      if (!key) return showToast('أدخل API Key أولاً', true);
+      try {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-goog-api-key': key
+          },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: 'Reply with OK' }] }],
+            generationConfig: { maxOutputTokens: 20 }
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
+        showToast(`✅ تم الاتصال بنجاح بـ ${model}`);
+      } catch (e) {
+        showToast(`فشل الاتصال: ${e.message}`, true);
+      }
+    }
+
+    async function fetchGeminiModelsFromAPI() {
+      const key = document.getElementById('cfg-ai-key').value.trim();
+      if (!key) return showToast('أدخل API Key أولاً', true);
+      try {
+        const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
+          headers: { 'x-goog-api-key': key }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
+        const select = document.getElementById('cfg-ai-model-select');
+        const models = (data.models || []).filter(m => m.supportedGenerationMethods?.includes('generateContent'));
+        if (models.length) {
+          const group = document.createElement('optgroup');
+          group.label = 'Fetched from your Key';
+          models.forEach(m => {
+            const id = m.name.replace('models/', '');
+            const opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = id;
+            group.appendChild(opt);
+          });
+          select.prepend(group);
+          showToast(`تم جلب ${models.length} موديل من مفتاحك`);
+        }
+      } catch (e) {
+        showToast(`خطأ في الجلب: ${e.message}`, true);
+      }
+    }
+
+    async function testElevenLabsVoice() {
+      saveSettings(false);
+      const cfg = getSettings();
+      if (!cfg.elevenKey || !cfg.voiceId) return showToast('أدخل ElevenLabs API Key و Voice ID أولاً', true);
+      document.getElementById('current-script-box').value = 'أهلاً بيك، ده اختبار سريع للصوت المستنسخ على موديل إليفين لابس.';
+      await speakCurrentScript();
+    }
+
+    // Initialize on load
+    loadSettingsIntoUI();
+    populateAudioOutputDevices();
+  </script>
+</body>
+</html>
